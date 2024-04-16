@@ -3,7 +3,7 @@
   "version": "1.0.0",
   "main": "expo-router/entry",
   "scripts": {
-    "start": "expo start",
+    "start": "expo start --dev-client",
     "android": "expo run:android",
     "ios": "expo run:ios",
     "web": "expo start --web"
@@ -31,7 +31,7 @@
     "formik": "^2.4.5",
     "react": "18.2.0",
     "react-dom": "18.2.0",
-    "react-native": "^0.73.6",
+    "react-native": "0.73.6",
     "react-native-bcrypt": "^2.4.0",
     "react-native-crypto": "^2.2.0",
     "react-native-crypto-js": "^1.0.0",

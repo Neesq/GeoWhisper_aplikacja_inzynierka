@@ -14,7 +14,8 @@ const HomePage: FC = () => {
         router.replace("views/login-register-view/login-view");
       } else {
         // await AsyncStorage.removeItem("userId");
-        router.replace("views/main-view");
+        router.replace("views/login-register-view/login-view");
+        // router.replace("views/main-view");
       }
     };
     checkUserId();

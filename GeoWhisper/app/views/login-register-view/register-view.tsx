@@ -63,14 +63,17 @@ const RegisterView = () => {
 
   const handleRegister = async (code: string) => {
     if (Number(sentCode) === Number(code)) {
-      await axios.post("http://192.168.1.55:3000/register", {
-        user: {
-          name: userData.name,
-          directionalNumber: userData.directionalNumber,
-          phoneNumber: userData.phoneNumber,
-          password: userData.password,
-        },
-      });
+      await axios.post(
+        "https://geowhisper-aplikacja-inzynierka.onrender.com/register",
+        {
+          user: {
+            name: userData.name,
+            directionalNumber: userData.directionalNumber,
+            phoneNumber: userData.phoneNumber,
+            password: userData.password,
+          },
+        }
+      );
       router.replace("views/login-register-view/login-view");
     }
   };
@@ -88,7 +91,7 @@ const RegisterView = () => {
         phoneNumber: values.phoneNumber,
       });
       const response = await axios.post<{ code: string }>(
-        "http://192.168.1.55:3000/send-code",
+        "https://geowhisper-aplikacja-inzynierka.onrender.com/send-code",
         {
           phoneNumber: values.phoneNumber,
           directionalNumber: values.directionalNumber,

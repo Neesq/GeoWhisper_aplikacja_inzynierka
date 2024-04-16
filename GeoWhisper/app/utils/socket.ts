@@ -1,6 +1,6 @@
 import { io } from "socket.io-client";
 
-export const socket = io("http://192.168.1.55:3001", {
+export const socket = io("wss://geowhisper-aplikacja-inzynierka.onrender.com", {
   transports: ["websocket"],
 });
 

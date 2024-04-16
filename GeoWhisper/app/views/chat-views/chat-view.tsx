@@ -68,7 +68,7 @@ const ChatView: React.FC = () => {
     const chattingWithUser = await AsyncStorage.getItem("invitedUserId");
     setUserIds({ from: userId!, to: chattingWithUser! });
     const response = await axios.get(
-      `http://192.168.1.55:3000/get-user-name/${chattingWithUser}`
+      `https://geowhisper-aplikacja-inzynierka.onrender.com/get-user-name/${chattingWithUser}`
     );
     if (response.data.userName) {
       setUserNameOfChatter(response.data.userName);

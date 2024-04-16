@@ -53,10 +53,13 @@ const MainView = () => {
   const handleUserAvailable = async () => {
     const userId = await AsyncStorage.getItem("userId");
     try {
-      await axios.post("http://192.168.1.55:3000/user-availabilty-status", {
-        userId: userId,
-        available: true,
-      });
+      await axios.post(
+        "https://geowhisper-aplikacja-inzynierka.onrender.com:3000/user-availabilty-status",
+        {
+          userId: userId,
+          available: true,
+        }
+      );
       return;
     } catch (error) {
       console.log(error);
@@ -89,7 +92,7 @@ const MainView = () => {
       const userId = await AsyncStorage.getItem("userId");
       const newUserName = generateUserName();
       const response = await axios.post(
-        "http://192.168.1.55:3000/change-user-name",
+        "https://geowhisper-aplikacja-inzynierka.onrender.com/change-user-name",
         {
           userId: userId,
           userName: newUserName,
@@ -110,7 +113,7 @@ const MainView = () => {
     const getUserName = async () => {
       const userId = await AsyncStorage.getItem("userId");
       const userName = await axios.get(
-        `http://192.168.1.55:3000/get-user-name/${userId}`
+        `https://geowhisper-aplikacja-inzynierka.onrender.com/get-user-name/${userId}`
       );
 
       if (userName.data.userName) {
@@ -154,10 +157,13 @@ const MainView = () => {
         const userId = await AsyncStorage.getItem("userId");
         const response = await axios.post<
           { userId: string; userName: string }[] | null
-        >("http://192.168.1.55:3000/get-users-to-chat", {
-          userId: userId,
-          oneChat: numberOfChats.single,
-        });
+        >(
+          "https://geowhisper-aplikacja-inzynierka.onrender.com/get-users-to-chat",
+          {
+            userId: userId,
+            oneChat: numberOfChats.single,
+          }
+        );
 
         if (response.data?.length) {
           await AsyncStorage.setItem("invitedUserId", response.data[0].userId);

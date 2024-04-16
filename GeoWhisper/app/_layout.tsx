@@ -66,11 +66,14 @@ const AppLayout = () => {
       const updateLocationOnChange = async () => {
         const { longitude, latitude } = currentLocation.coords;
         if (longitude && latitude && userId) {
-          await axios.post("http://192.168.1.55:3000/update-location", {
-            userId: userId,
-            longitude: longitude,
-            latitude: latitude,
-          });
+          await axios.post(
+            "https://geowhisper-aplikacja-inzynierka.onrender.com/update-location",
+            {
+              userId: userId,
+              longitude: longitude,
+              latitude: latitude,
+            }
+          );
         }
       };
       updateLocationOnChange();

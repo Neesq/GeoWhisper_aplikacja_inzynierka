@@ -60,7 +60,7 @@ const LoginView = () => {
       const storedUserId = await AsyncStorage.getItem("userId");
 
       const response = await axios.post(
-        "http://192.168.1.55:3000/get-user-id",
+        "https://geowhisper-aplikacja-inzynierka.onrender.com/get-user-id",
         {
           user: {
             directionalNumber: values.directionalNumber,
@@ -69,14 +69,17 @@ const LoginView = () => {
         }
       );
 
-      const loginResponse = await axios.post("http://192.168.1.55:3000/login", {
-        user: {
-          id: response.data.userId,
-          directionalNumber: values.directionalNumber,
-          phoneNumber: values.phoneNumber,
-          password: values.password,
-        },
-      });
+      const loginResponse = await axios.post(
+        "https://geowhisper-aplikacja-inzynierka.onrender.com/login",
+        {
+          user: {
+            id: response.data.userId,
+            directionalNumber: values.directionalNumber,
+            phoneNumber: values.phoneNumber,
+            password: values.password,
+          },
+        }
+      );
       if (loginResponse.data.message) {
         Toast.show({ type: "error", text1: loginResponse.data.message });
       } else if (loginResponse.data.userId) {

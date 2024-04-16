@@ -140,7 +140,9 @@ const SettingsView = () => {
             <Button
               onPress={async () => {
                 try {
-                  await axios.post("http://192.168.1.55:3000/witam");
+                  await axios.post(
+                    "https://geowhisper-aplikacja-inzynierka.onrender.com/witam"
+                  );
                 } catch (eror) {
                   console.log(eror);
                 }

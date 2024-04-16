@@ -28,10 +28,13 @@ const AwaitingChatView = () => {
   const handleUserAvailable = async () => {
     const userId = await AsyncStorage.getItem("userId");
     try {
-      await axios.post("http://192.168.1.55:3000/user-availabilty-status", {
-        userId: userId,
-        available: false,
-      });
+      await axios.post(
+        "https://geowhisper-aplikacja-inzynierka.onrender.com/user-availabilty-status",
+        {
+          userId: userId,
+          available: false,
+        }
+      );
     } catch (error) {
       Toast.show({ type: "error", text1: "Błąd zmiany statusu użytkownika" });
     }

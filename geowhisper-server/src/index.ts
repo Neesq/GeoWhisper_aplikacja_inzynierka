@@ -24,6 +24,18 @@ app.use(cors());
 const port = process.env.PORT || 3000;
 const prisma = new PrismaClient();
 
+const server = createServer(app);
+const io = new Server(server, {
+  cors: {
+    origin: "*",
+  },
+});
+// io.listen(3001, {
+//   cors: {
+//     origin: "*",
+//   },
+// });
+
 interface CustomRequest<T, U extends Query> extends Request {
   body: T;
   query: U;
@@ -453,17 +465,9 @@ app.post(
   }
 );
 
-app.listen(port, () => {
-  console.log(`[server]: Server is running at http://localhost:${port}`);
-});
-
-const server = createServer(app);
-const io = new Server(server);
-io.listen(3001, {
-  cors: {
-    origin: "*",
-  },
-});
+// app.listen(port, () => {
+//   console.log(`[server]: Server is running at http://localhost:${port}`);
+// });
 
 const userIdToSocketId: Record<string, string> = {};
 
@@ -597,4 +601,8 @@ io.on("connection", (socket: Socket) => {
       delete userIdToSocketId[userId];
     }
   });
+});
+
+server.listen(port, () => {
+  console.log(`[server]: Server is running at http://localhost:${port}`);
 });

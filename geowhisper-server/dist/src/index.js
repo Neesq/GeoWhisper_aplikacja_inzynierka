@@ -34,6 +34,12 @@ app.use(body_parser_1.default.urlencoded({ extended: true }));
 app.use((0, cors_1.default)());
 const port = process.env.PORT || 3000;
 const prisma = new client_1.PrismaClient();
+const server = (0, http_1.createServer)(app);
+const io = new socket_io_1.Server(server, {
+    cors: {
+        origin: "*",
+    },
+});
 app.get("/", (req, res) => {
     console.log("WITAM");
     res.send("Express + TypeScript Server");
@@ -353,16 +359,9 @@ app.post("/user-availabilty-status", (req, res) => __awaiter(void 0, void 0, voi
         throw error;
     }
 }));
-app.listen(port, () => {
-    console.log(`[server]: Server is running at http://localhost:${port}`);
-});
-const server = (0, http_1.createServer)(app);
-const io = new socket_io_1.Server(server);
-io.listen(3001, {
-    cors: {
-        origin: "*",
-    },
-});
+// app.listen(port, () => {
+//   console.log(`[server]: Server is running at http://localhost:${port}`);
+// });
 const userIdToSocketId = {};
 const setUserOnlineState = (userId, state) => __awaiter(void 0, void 0, void 0, function* () {
     yield prisma.user.update({
@@ -474,4 +473,9 @@ io.on("connection", (socket) => {
             delete userIdToSocketId[userId];
         }
     });
+});
+// io.listen(Number(port));
+// app.listen(port);
+server.listen(port, () => {
+    console.log(`[server]: Server is running at http://localhost:${port}`);
 });

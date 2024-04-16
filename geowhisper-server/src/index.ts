@@ -477,7 +477,8 @@ const setUserOnlineState = async (userId: string, state: boolean) => {
       id: userId,
     },
     data: {
-      isOnline: true,
+      isOnline: state,
+      isAvailable: true,
     },
   });
 };

@@ -54,7 +54,7 @@ const MainView = () => {
     const userId = await AsyncStorage.getItem("userId");
     try {
       await axios.post(
-        "https://geowhisper-aplikacja-inzynierka.onrender.com:3000/user-availabilty-status",
+        "https://geowhisper-aplikacja-inzynierka.onrender.com/user-availabilty-status",
         {
           userId: userId,
           available: true,
@@ -166,6 +166,7 @@ const MainView = () => {
         );
 
         if (response.data?.length) {
+          console.log(response.data[0].userId);
           await AsyncStorage.setItem("invitedUserId", response.data[0].userId);
           socket.emit("sendInvite", {
             from: userId,

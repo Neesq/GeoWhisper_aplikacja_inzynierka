@@ -603,9 +603,9 @@ io.on("connection", (socket: Socket) => {
   });
 });
 
-io.listen(Number(port));
-app.listen(port);
+// io.listen(Number(port));
+// app.listen(port);
 
-// server.listen(port, () => {
-//   console.log(`[server]: Server is running at http://localhost:${port}`);
-// });
+server.listen(port, () => {
+  console.log(`[server]: Server is running at http://localhost:${port}`);
+});

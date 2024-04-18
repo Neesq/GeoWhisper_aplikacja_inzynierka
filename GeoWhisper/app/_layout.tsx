@@ -29,7 +29,7 @@ const AppLayout = () => {
   }, [userId]);
   useEffect(() => {
     (async () => {
-      let { status } = await Location.requestBackgroundPermissionsAsync();
+      let { status } = await Location.requestForegroundPermissionsAsync();
       if (status !== "granted") {
         return;
       }
@@ -57,6 +57,7 @@ const AppLayout = () => {
         }
       );
     } catch (error) {
+      console.log(error);
       Toast.show({ type: "error", text1: "Błąd przy pobieraniu lokalizacji." });
     }
   };

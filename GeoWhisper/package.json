@@ -10,8 +10,8 @@
     "web": "expo start --web"
   },
   "dependencies": {
-    "@react-native-async-storage/async-storage": "^1.23.1",
-    "@react-native-community/slider": "^4.5.0",
+    "@react-native-async-storage/async-storage": "^1.21.0",
+    "@react-native-community/slider": "^4.4.2",
     "@react-navigation/native": "^6.1.9",
     "@react-navigation/native-stack": "^6.9.17",
     "@types/bcrypt": "^5.0.2",
@@ -38,7 +38,6 @@
     "react-native-crypto": "^2.2.0",
     "react-native-crypto-js": "^1.0.0",
     "react-native-element-dropdown": "^2.10.4",
-    "react-native-get-random-values": "^1.11.0",
     "react-native-paper": "^5.12.0",
     "react-native-paper-dropdown": "^1.0.7",
     "react-native-picker-select": "^9.1.3",

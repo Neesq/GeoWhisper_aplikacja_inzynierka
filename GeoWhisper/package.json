@@ -29,7 +29,7 @@
     "expo-crypto": "~12.8.1",
     "expo-dev-client": "^3.3.11",
     "expo-location": "^16.5.5",
-    "expo-router": "~3.4.8",
+    "expo-router": "~3.4.10",
     "expo-sms": "~11.7.1",
     "expo-status-bar": "~1.11.1",
     "formik": "^2.4.5",

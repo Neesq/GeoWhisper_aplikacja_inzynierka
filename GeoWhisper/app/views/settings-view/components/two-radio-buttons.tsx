@@ -1,3 +1,4 @@
+import { useTheme } from "app/utils/theme-provider";
 import { Text, View } from "react-native";
 import { RadioButton } from "react-native-paper";
 
@@ -16,6 +17,7 @@ export const TwoRadioOptions = <T extends Record<string, boolean>>({
   option2Text,
   setRadioOptions,
 }: TwoRadioOptionsProps<T>) => {
+  const theme = useTheme();
   const handleOptionPress = (key: keyof T) => {
     const updatedOptions = { ...radioOptions };
     for (const optionKey in updatedOptions) {
@@ -33,7 +35,7 @@ export const TwoRadioOptions = <T extends Record<string, boolean>>({
       <Text
         style={{
           fontSize: 15,
-          color: "gray",
+          color: theme.appTheme === "light" ? "gray" : theme.themeLightColor,
           textAlign: "center",
         }}
       >
@@ -57,7 +59,7 @@ export const TwoRadioOptions = <T extends Record<string, boolean>>({
         >
           <RadioButton
             value="first"
-            color="#2196F3"
+            color={theme.appMainColor}
             status={
               radioOptions[Object.keys(radioOptions)[0]]
                 ? "checked"
@@ -65,7 +67,17 @@ export const TwoRadioOptions = <T extends Record<string, boolean>>({
             }
             onPress={() => handleOptionPress(Object.keys(radioOptions)[0])}
           />
-          <Text style={{ fontSize: 16 }}>{option1Text}</Text>
+          <Text
+            style={{
+              fontSize: 16,
+              color:
+                theme.appTheme === "light"
+                  ? theme.themeDarkColor
+                  : theme.themeLightColor,
+            }}
+          >
+            {option1Text}
+          </Text>
         </View>
         <View
           style={{
@@ -77,7 +89,7 @@ export const TwoRadioOptions = <T extends Record<string, boolean>>({
         >
           <RadioButton
             value="second"
-            color="#2196F3"
+            color={theme.appMainColor}
             status={
               radioOptions[Object.keys(radioOptions)[1]]
                 ? "checked"
@@ -85,7 +97,17 @@ export const TwoRadioOptions = <T extends Record<string, boolean>>({
             }
             onPress={() => handleOptionPress(Object.keys(radioOptions)[1])}
           />
-          <Text style={{ fontSize: 16 }}>{option2Text}</Text>
+          <Text
+            style={{
+              fontSize: 16,
+              color:
+                theme.appTheme === "light"
+                  ? theme.themeDarkColor
+                  : theme.themeLightColor,
+            }}
+          >
+            {option2Text}
+          </Text>
         </View>
       </View>
     </View>

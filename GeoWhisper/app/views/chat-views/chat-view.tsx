@@ -3,7 +3,7 @@ import ConfirmDialog from "app/components/dialog-components/confirm-dialog";
 import { AppHeaderTitle } from "app/components/ui/app-header-title";
 import { socket } from "app/utils/socket";
 import axios from "axios";
-import { router, useNavigation } from "expo-router";
+import { router, useLocalSearchParams, useNavigation } from "expo-router";
 import React, { useEffect, useRef, useState } from "react";
 import {
   FlatList,
@@ -16,15 +16,24 @@ import {
   TextInput,
   View,
 } from "react-native";
-import { Icon, IconButton } from "react-native-paper";
+import { ActivityIndicator, Icon, IconButton } from "react-native-paper";
 import Toast from "react-native-toast-message";
 import { ChatBaloon } from "./components/chat-baloon";
+import { axiosInstance } from "app/utils/axios-instance";
+import { useTheme } from "app/utils/theme-provider";
+import { CheckIfInRange } from "./components/check-if-in-range";
+
+let disconnectTimerId: NodeJS.Timeout | null = null;
+let rangeCheckIntervalId: NodeJS.Timeout | null = null;
+let toasterShowed = false;
 
 const ChatView: React.FC = () => {
   const [inputText, setInputText] = useState("");
   const [confirmDialog, setConfirmDialog] = useState(false);
-  const [stillInRange, setStillInRange] = useState(true);
-  const [endChat, setEndChat] = useState(false);
+
+  const params = useLocalSearchParams();
+  const { invitedUser } = params;
+
   const [messages, setMessages] = useState<
     { from: string; to: string; message: string }[]
   >([]);
@@ -35,6 +44,7 @@ const ChatView: React.FC = () => {
   const [userNameOfChatter, setUserNameOfChatter] = useState("");
   const flatListRef = useRef<FlatList>(null);
   const navigation = useNavigation();
+  const theme = useTheme();
   const openConfirmDialog = () => {
     Keyboard.dismiss();
     setConfirmDialog(true);
@@ -46,7 +56,7 @@ const ChatView: React.FC = () => {
   useEffect(() => {
     navigation.setOptions({
       headerStyle: {
-        backgroundColor: "#2196F3",
+        backgroundColor: theme.appMainColor,
       },
       headerTitle: () => <AppHeaderTitle />,
       headerLeft: () => (
@@ -57,7 +67,7 @@ const ChatView: React.FC = () => {
       headerTitleAlign: "center",
       headerBackVisible: false,
     });
-  }, [navigation]);
+  }, [navigation, theme]);
 
   useEffect(() => {
     flatListRef.current?.scrollToEnd({ animated: true });
@@ -65,14 +75,11 @@ const ChatView: React.FC = () => {
 
   const setUserIdsInChat = async () => {
     const userId = await AsyncStorage.getItem("userId");
-    const chattingWithUser = await AsyncStorage.getItem("invitedUserId");
-    setUserIds({ from: userId!, to: chattingWithUser! });
-    const response = await axios.get(
-      `https://geowhisper-aplikacja-inzynierka.onrender.com/get-user-name/${chattingWithUser}`
-    );
+    const response = await axiosInstance.get(`/get-user-name/${invitedUser}`);
     if (response.data.userName) {
       setUserNameOfChatter(response.data.userName);
     }
+    setUserIds({ from: userId!, to: String(invitedUser)! });
   };
   useEffect(() => {
     setUserIdsInChat();
@@ -100,88 +107,60 @@ const ChatView: React.FC = () => {
       socket.off("messageReceived");
     };
   }, []);
+
   useEffect(() => {
-    let intervalId: NodeJS.Timeout;
     socket.on("chatEnded", async (chatEnded: boolean) => {
-      await AsyncStorage.removeItem("invitedUserId");
-      socket.emit("stopRangeCheck");
+      if (rangeCheckIntervalId) {
+        clearInterval(rangeCheckIntervalId);
+      }
+      if (disconnectTimerId) {
+        clearTimeout(disconnectTimerId);
+      }
       Toast.show({
         type: "info",
         text1: "Chat zakończył się zaraz zostaniesz przeniesiony.",
-        visibilityTime: 1000,
+        visibilityTime: 2000,
       });
-      intervalId = setInterval(() => {
+      setTimeout(() => {
         router.replace("views/main-view");
       }, 2000);
     });
     return () => {
-      clearInterval(intervalId);
       socket.off("chatEnded");
     };
   }, []);
   const handleEndChat = () => {
+    if (rangeCheckIntervalId) {
+      clearInterval(rangeCheckIntervalId);
+    }
+    if (disconnectTimerId) {
+      clearTimeout(disconnectTimerId);
+    }
     socket.emit("endChat", userIds.to);
-    socket.emit("stopRangeCheck");
     closeConfirmDialog();
     router.replace("views/main-view");
   };
 
-  useEffect(() => {
-    if (userIds.from && userIds.to)
-      socket.emit("startRangeCheck", {
-        userId: userIds.from,
-        userIdToCheck: userIds.to,
-      });
-  }, [userIds.from, userIds.to]);
-
-  useEffect(() => {
-    const handleUserInRange = () => {
-      setStillInRange(true);
-      if (endChat) {
-        setEndChat(false);
-        Toast.show({
-          type: "info",
-          text1: "Użytkownik wrócił, czat będzie kontynuowany.",
-        });
-      }
-    };
-
-    const handleUserOutOfRange = () => {
-      setStillInRange(false);
-      if (!endChat) {
-        const timeoutId = setTimeout(() => {
-          setEndChat(true);
-          Toast.show({
-            type: "info",
-            text1:
-              "Użytkownik poza zasięgiem. Jeżeli nie powróci, zostaniecie przeniesieni.",
-            visibilityTime: 4000,
-          });
-          setTimeout(() => {
-            socket.emit("stopRangeCheck");
-            router.push("views/main-view");
-          }, 5000);
-        }, 5000);
-        return () => clearTimeout(timeoutId);
-      }
-    };
-
-    if (socket) {
-      socket.on("userInRange", handleUserInRange);
-      socket.on("userOutOfRange", handleUserOutOfRange);
-    }
-
-    return () => {
-      if (socket) {
-        socket.off("userInRange", handleUserInRange);
-        socket.off("userOutOfRange", handleUserOutOfRange);
-      }
-    };
-  }, [socket, endChat]);
+  if (!userIds.to || !userIds.from) return <ActivityIndicator />;
 
   return (
     <>
-      <View style={styles.container}>
+      <CheckIfInRange
+        userIds={userIds}
+        disconnectTimerId={disconnectTimerId}
+        rangeCheckIntervalId={rangeCheckIntervalId}
+        toasterShowed={toasterShowed}
+      />
+      <View
+        style={{
+          ...styles.container,
+          backgroundColor:
+            theme.appTheme === "light"
+              ? theme.themeLightColor
+              : theme.themeDarkColor,
+          height: "100%",
+        }}
+      >
         <View
           style={{
             width: "80%",
@@ -195,12 +174,17 @@ const ChatView: React.FC = () => {
               flexDirection: "row",
               alignItems: "center",
               gap: 50,
-              backgroundColor: "white",
               borderRadius: 50,
               padding: 10,
+              backgroundColor: theme.appTheme === "dark" ? "#88898a" : "white",
             }}
           >
-            <View style={{ flex: 4, alignItems: "center" }}>
+            <View
+              style={{
+                flex: 4,
+                alignItems: "center",
+              }}
+            >
               <Text>{userNameOfChatter}</Text>
             </View>
           </View>
@@ -230,17 +214,30 @@ const ChatView: React.FC = () => {
         <KeyboardAvoidingView
           behavior={Platform.OS === "ios" ? "padding" : undefined}
           style={styles.inputContainer}
-          enabled={!confirmDialog}
+          enabled={!confirmDialog || toasterShowed}
         >
           <TextInput
             value={inputText}
             onChangeText={setInputText}
             placeholder="Napisz wiadomość ..."
-            style={styles.input}
+            placeholderTextColor={
+              theme.appTheme === "light"
+                ? theme.themeDarkColor
+                : theme.themeLightColor
+            }
+            style={{
+              ...styles.input,
+              borderColor: theme.appMainColor,
+              color:
+                theme.appTheme === "light"
+                  ? theme.themeDarkColor
+                  : theme.themeLightColor,
+            }}
           />
           <IconButton
             icon="send"
-            iconColor="#2196F3"
+            disabled={toasterShowed}
+            iconColor={theme.appMainColor}
             onPress={handleSendMessage}
           />
         </KeyboardAvoidingView>

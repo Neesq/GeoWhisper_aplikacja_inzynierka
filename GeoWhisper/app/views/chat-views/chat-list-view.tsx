@@ -2,7 +2,9 @@ import AsyncStorage from "@react-native-async-storage/async-storage";
 import { AppHeaderTitle } from "app/components/ui/app-header-title";
 import { Chip } from "app/components/ui/chip";
 import { IncognitoIcon } from "app/components/ui/incognito-icon";
+import { axiosInstance } from "app/utils/axios-instance";
 import { socket } from "app/utils/socket";
+import { useTheme } from "app/utils/theme-provider";
 import axios from "axios";
 import { router, useNavigation } from "expo-router";
 import { useEffect, useState } from "react";
@@ -15,11 +17,11 @@ import Toast from "react-native-toast-message";
 const ChatListView = () => {
   const navigation = useNavigation();
   const [userList, setUserList] = useState<{ id: string; name: string }[]>([]);
-
+  const theme = useTheme();
   useEffect(() => {
     navigation.setOptions({
       headerStyle: {
-        backgroundColor: "#2196F3",
+        backgroundColor: theme.appMainColor,
       },
       headerTitle: () => <AppHeaderTitle />,
       headerLeft: () => (
@@ -30,18 +32,15 @@ const ChatListView = () => {
       headerTitleAlign: "center",
       headerBackVisible: false,
     });
-  }, [navigation]);
+  }, [navigation, theme]);
 
   const handleUserAvailable = async () => {
     const userId = await AsyncStorage.getItem("userId");
     try {
-      await axios.post(
-        "https://geowhisper-aplikacja-inzynierka.onrender.com/user-availabilty-status",
-        {
-          userId: userId,
-          available: false,
-        }
-      );
+      await axiosInstance.post("/user-availabilty-status", {
+        userId: userId,
+        available: false,
+      });
     } catch (error) {
       Toast.show({ type: "error", text1: "Błąd zmiany statusu użytkownika" });
     }
@@ -54,15 +53,12 @@ const ChatListView = () => {
   const handleSearchChats = async () => {
     try {
       const userId = await AsyncStorage.getItem("userId");
-      const response = await axios.post<
+      const response = await axiosInstance.post<
         { userId: string; userName: string }[] | null
-      >(
-        "https://geowhisper-aplikacja-inzynierka.onrender.com/get-users-to-chat",
-        {
-          userId: userId,
-          oneChat: false,
-        }
-      );
+      >("/get-users-to-chat", {
+        userId: userId,
+        oneChat: false,
+      });
       if (response.data) {
         const userList = response.data.map((user) => ({
           id: user.userId,
@@ -82,17 +78,28 @@ const ChatListView = () => {
   }, []);
 
   const handleSendInvite = async (userId: string) => {
-    await AsyncStorage.setItem("invitedUserId", userId);
+    // await AsyncStorage.setItem("invitedUserId", userId);
     const senderId = await AsyncStorage.getItem("userId");
     socket.emit("sendInvite", {
       from: senderId,
       to: userId,
     });
-    router.push("views/chat-views/awaiting-chat-view");
+    router.push({
+      pathname: "views/chat-views/awaiting-chat-view",
+      params: { invitedUser: userId },
+    });
   };
 
   return (
-    <View>
+    <View
+      style={{
+        backgroundColor:
+          theme.appTheme === "light"
+            ? theme.themeLightColor
+            : theme.themeDarkColor,
+        height: "100%",
+      }}
+    >
       <View
         style={{
           width: "90%",
@@ -110,6 +117,10 @@ const ChatListView = () => {
             textShadowOffset: { width: 1, height: 1 },
             textShadowRadius: 3,
             textAlign: "center",
+            color:
+              theme.appTheme === "light"
+                ? theme.themeDarkColor
+                : theme.themeLightColor,
           }}
         >
           Kliknij w jednego z użytkowników, aby wysłać prośbę o rozpoczęcie
@@ -128,7 +139,7 @@ const ChatListView = () => {
                   text={<Text style={{ color: "white" }}>{user.name}</Text>}
                   leftIcon={<Icon size={30} source="incognito" />}
                   rightIcon={<Icon size={30} source="chat-question-outline" />}
-                  backgroundColor="#2196F3"
+                  backgroundColor={theme.appMainColor}
                 />
               </Pressable>
             </View>

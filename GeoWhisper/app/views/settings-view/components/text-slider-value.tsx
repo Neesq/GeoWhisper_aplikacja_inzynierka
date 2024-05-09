@@ -1,4 +1,5 @@
 import Slider from "@react-native-community/slider";
+import { useTheme } from "app/utils/theme-provider";
 import { View, Text } from "react-native";
 
 interface TextSliderValueProps {
@@ -20,6 +21,7 @@ export const TextSliderValue = ({
   sliderStep,
   sliderValueChange,
 }: TextSliderValueProps) => {
+  const theme = useTheme();
   return (
     <View
       style={{
@@ -29,10 +31,19 @@ export const TextSliderValue = ({
         marginTop: 10,
       }}
     >
-      <Text>{settingName}</Text>
+      <Text
+        style={{
+          color:
+            theme.appTheme === "light"
+              ? theme.themeDarkColor
+              : theme.themeLightColor,
+        }}
+      >
+        {settingName}
+      </Text>
       <View
         style={{
-          backgroundColor: "#2196F3",
+          backgroundColor: theme.appMainColor,
           display: "flex",
           justifyContent: "center",
           alignItems: "center",
@@ -48,6 +59,11 @@ export const TextSliderValue = ({
       </View>
       <Slider
         style={{ width: 250, height: 40 }}
+        maximumTrackTintColor={
+          theme.appTheme === "light"
+            ? theme.themeDarkColor
+            : theme.themeLightColor
+        }
         minimumTrackTintColor={`${sliderColor}`}
         thumbTintColor={`${sliderColor}`}
         minimumValue={sliderMinVal}

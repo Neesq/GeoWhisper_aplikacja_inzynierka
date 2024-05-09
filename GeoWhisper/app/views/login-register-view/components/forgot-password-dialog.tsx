@@ -1,3 +1,4 @@
+import { useTheme } from "app/utils/theme-provider";
 import { Field, Formik } from "formik";
 import { FC } from "react";
 import { View, Text } from "react-native";
@@ -22,6 +23,10 @@ interface ForgotPasswordDialogProps {
   open: boolean;
   onClose: () => void;
   handleConfirm: () => void;
+  appTheme: string;
+  appMainColor: string;
+  appDarkThemeColor: string;
+  appLightThemeColor: string;
 }
 const ForgotPasswordDialog: FC<ForgotPasswordDialogProps> = ({
   open,
@@ -29,10 +34,15 @@ const ForgotPasswordDialog: FC<ForgotPasswordDialogProps> = ({
   handleConfirm,
 }) => {
   // TODO: Add handle click function to get users to chat
-
+  const theme = useTheme();
   return (
     <Modal visible={open} onDismiss={onClose}>
-      <Card>
+      <Card
+        style={{
+          backgroundColor:
+            theme.appTheme === "light" ? "white" : theme.themeModalDarkColor,
+        }}
+      >
         <View style={{ marginTop: 10 }}>
           <Text
             style={{
@@ -90,9 +100,8 @@ const ForgotPasswordDialog: FC<ForgotPasswordDialogProps> = ({
             touched,
             errors,
             submitForm,
+            handleChange,
           }) => {
-            console.log(errors);
-
             return (
               <View
                 style={{
@@ -110,17 +119,17 @@ const ForgotPasswordDialog: FC<ForgotPasswordDialogProps> = ({
                   }}
                 >
                   <View style={{ flex: 1.5 }}>
-                    <Field
-                      as={TextInput}
-                      name="directionalNumber"
+                    <TextInput
                       label="Nr kierunkowy"
                       style={{ textAlign: "center" }}
-                      onChangeText={(value: string) =>
-                        setFieldValue("directionalNumber", value)
+                      onChangeText={handleChange("directionalNumber")}
+                      onBlur={handleBlur("directionalNumber")}
+                      value={
+                        values.directionalNumber
+                          ? String(values.directionalNumber)
+                          : ""
                       }
-                      onBlur={() => handleBlur("directionalNumber")}
-                      value={values.directionalNumber}
-                      activeOutlineColor="#2196F3"
+                      activeOutlineColor={theme.appMainColor}
                       mode="outlined"
                       keyboardType="numeric"
                       maxLength={3}
@@ -133,17 +142,15 @@ const ForgotPasswordDialog: FC<ForgotPasswordDialogProps> = ({
                       )}
                   </View>
                   <View style={{ flex: 2.5 }}>
-                    <Field
-                      as={TextInput}
+                    <TextInput
                       style={{ textAlign: "center" }}
-                      name="phoneNumber"
                       label="Numer telefonu"
-                      onChangeText={(value: string) =>
-                        setFieldValue("phoneNumber", value)
-                      }
+                      onChangeText={handleChange("phoneNumber")}
                       onBlur={handleBlur("phoneNumber")}
-                      value={values.phoneNumber?.toString()}
-                      activeOutlineColor="#2196F3"
+                      value={
+                        values.phoneNumber ? String(values.phoneNumber) : ""
+                      }
+                      activeOutlineColor={theme.appMainColor}
                       mode="outlined"
                       keyboardType="numeric"
                       maxLength={9}
@@ -154,18 +161,14 @@ const ForgotPasswordDialog: FC<ForgotPasswordDialogProps> = ({
                   </View>
                 </View>
                 <View>
-                  <Field
-                    as={TextInput}
-                    name="password"
+                  <TextInput
                     label="Hasło"
                     style={{ textAlign: "center" }}
-                    onChangeText={(value: string) =>
-                      setFieldValue("password", value)
-                    }
-                    onBlur={() => handleBlur("password")}
-                    value={values.password}
+                    onChangeText={handleChange("password")}
+                    onBlur={handleBlur("password")}
+                    value={values.password ? String(values.password) : ""}
                     secureTextEntry={true}
-                    activeOutlineColor="#2196F3"
+                    activeOutlineColor={theme.appMainColor}
                     mode="outlined"
                   />
                   {touched.password && !!errors.password && (
@@ -173,18 +176,18 @@ const ForgotPasswordDialog: FC<ForgotPasswordDialogProps> = ({
                   )}
                 </View>
                 <View>
-                  <Field
-                    as={TextInput}
-                    name="confirmPassword"
+                  <TextInput
                     label="Potwierdź hasło"
                     style={{ textAlign: "center" }}
-                    onChangeText={(value: string) =>
-                      setFieldValue("confirmPassword", value)
+                    onChangeText={handleChange("confirmPassword")}
+                    onBlur={handleBlur("confirmPassword")}
+                    value={
+                      values.confirmPassword
+                        ? String(values.confirmPassword)
+                        : ""
                     }
-                    onBlur={() => handleBlur("confirmPassword")}
-                    value={values.confirmPassword}
                     secureTextEntry={true}
-                    activeOutlineColor="#2196F3"
+                    activeOutlineColor={theme.appMainColor}
                     mode="outlined"
                   />
                   {touched.confirmPassword && !!errors.confirmPassword && (
@@ -213,7 +216,7 @@ const ForgotPasswordDialog: FC<ForgotPasswordDialogProps> = ({
                   </Button>
                   <Button
                     mode="contained"
-                    buttonColor="#2196F3"
+                    buttonColor={theme.appMainColor}
                     style={{ borderRadius: 5 }}
                     onPress={submitForm}
                   >

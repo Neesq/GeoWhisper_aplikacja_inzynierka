@@ -1,21 +1,29 @@
 import AsyncStorage from "@react-native-async-storage/async-storage";
 import { AppHeaderTitle } from "app/components/ui/app-header-title";
 import { Chip } from "app/components/ui/chip";
+import { axiosInstance } from "app/utils/axios-instance";
 import { socket } from "app/utils/socket";
+import { useTheme } from "app/utils/theme-provider";
 import axios from "axios";
-import { router, useNavigation } from "expo-router";
-import { useEffect } from "react";
+import { router, useLocalSearchParams, useNavigation } from "expo-router";
+import { useEffect, useState } from "react";
 import { Pressable, View } from "react-native";
 import { Icon, Text } from "react-native-paper";
 import Toast from "react-native-toast-message";
 
 const AwaitingChatView = () => {
   const navigation = useNavigation();
-  // TODO: Add handle click function to get users to chat
+  const theme = useTheme();
+  const params = useLocalSearchParams();
+  const { invitedUser } = params;
+  const [invitedUserName, setInvitedUserName] = useState<string>("");
   useEffect(() => {
     socket.on("inviteDecision", (inviteDecision: boolean) => {
       if (inviteDecision) {
-        router.push("views/chat-views/chat-view");
+        router.push({
+          pathname: "views/chat-views/chat-view",
+          params: { invitedUser },
+        });
       } else {
         router.replace("views/main-view");
       }
@@ -28,13 +36,10 @@ const AwaitingChatView = () => {
   const handleUserAvailable = async () => {
     const userId = await AsyncStorage.getItem("userId");
     try {
-      await axios.post(
-        "https://geowhisper-aplikacja-inzynierka.onrender.com/user-availabilty-status",
-        {
-          userId: userId,
-          available: false,
-        }
-      );
+      await axiosInstance.post("/user-availabilty-status", {
+        userId: userId,
+        available: false,
+      });
     } catch (error) {
       Toast.show({ type: "error", text1: "Błąd zmiany statusu użytkownika" });
     }
@@ -44,10 +49,28 @@ const AwaitingChatView = () => {
     handleUserAvailable();
   }, []);
 
+  const getInvitedUserName = async () => {
+    try {
+      const response = await axiosInstance.get(`/get-user-name/${invitedUser}`);
+      if (response.data && response.data.userName) {
+        setInvitedUserName(response.data.userName);
+      } else if (response.data && response.data.message) {
+        Toast.show({
+          type: "error",
+          text1: "Nie znaleziono nazwy zaproszonego użytkownika.",
+        });
+      }
+    } catch (error) {}
+  };
+
+  useEffect(() => {
+    getInvitedUserName();
+  }, []);
+
   useEffect(() => {
     navigation.setOptions({
       headerStyle: {
-        backgroundColor: "#2196F3",
+        backgroundColor: theme.appMainColor,
       },
       headerTitle: () => <AppHeaderTitle />,
       headerLeft: () => (
@@ -58,10 +81,18 @@ const AwaitingChatView = () => {
       headerTitleAlign: "center",
       headerBackVisible: false,
     });
-  }, [navigation]);
+  }, [navigation, theme]);
 
   return (
-    <View>
+    <View
+      style={{
+        backgroundColor:
+          theme.appTheme === "light"
+            ? theme.themeLightColor
+            : theme.themeDarkColor,
+        height: "100%",
+      }}
+    >
       <View
         style={{
           width: "90%",
@@ -79,15 +110,19 @@ const AwaitingChatView = () => {
             textShadowOffset: { width: 1, height: 1 },
             textShadowRadius: 3,
             textAlign: "center",
+            color:
+              theme.appTheme === "light"
+                ? theme.themeDarkColor
+                : theme.themeLightColor,
           }}
         >
           Oczekiwanie na odpowiedź użytkownika
         </Text>
         <View style={{ marginTop: 40 }}>
           <Chip
-            text={<Text style={{ color: "black" }}>Użytkownik</Text>}
+            text={<Text style={{ color: "black" }}>{invitedUserName}</Text>}
             leftIcon={<Icon size={30} source="incognito" />}
-            backgroundColor="#2196F3"
+            backgroundColor={theme.appMainColor}
           />
         </View>
         <View

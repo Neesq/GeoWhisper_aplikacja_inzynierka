@@ -1,17 +1,15 @@
 import AsyncStorage from "@react-native-async-storage/async-storage";
 import { AppHeaderTitle } from "app/components/ui/app-header-title";
-import axios from "axios";
 import { router, useNavigation } from "expo-router";
-import { Field, Formik } from "formik";
+import { Field, Formik, FormikHelpers } from "formik";
 import { useEffect, useState } from "react";
 import { Pressable, View } from "react-native";
 import Toast from "react-native-toast-message";
-import { v4 as uuidv4 } from "uuid";
-
+import { axiosInstance } from "app/utils/axios-instance";
+import { useTheme } from "app/utils/theme-provider";
 import { Button, Text, TextInput } from "react-native-paper";
 import * as yup from "yup";
 import ForgotPasswordDialog from "./components/forgot-password-dialog";
-import { useTheme } from "app/utils/theme-provider";
 
 interface LogInValues {
   directionalNumber: number | null;
@@ -34,13 +32,13 @@ const LoginView = () => {
   useEffect(() => {
     navigation.setOptions({
       headerStyle: {
-        backgroundColor: "#2196F3",
+        backgroundColor: theme.appMainColor,
       },
       headerTitle: () => <AppHeaderTitle />,
       headerTitleAlign: "center",
       headerBackVisible: false,
     });
-  }, [navigation]);
+  }, [navigation, theme]);
 
   const openForgotPasswordModal = () => {
     setForgotPasswordDialog(true);
@@ -50,47 +48,38 @@ const LoginView = () => {
   };
 
   const handleSubmit = async (
-    values: LogInValues
-    // formikHelpers: FormikHelpers<LogInValues>
+    values: LogInValues,
+    formikHelpers: FormikHelpers<LogInValues>
   ) => {
     try {
       if (!values.password) {
         return;
       }
-      const storedUserId = await AsyncStorage.getItem("userId");
+      const response = await axiosInstance.post("/get-user-id", {
+        directionalNumber: values.directionalNumber,
+        phoneNumber: values.phoneNumber,
+      });
 
-      const response = await axios.post(
-        "https://geowhisper-aplikacja-inzynierka.onrender.com/get-user-id",
-        {
-          user: {
-            directionalNumber: values.directionalNumber,
-            phoneNumber: values.phoneNumber,
-          },
-        }
-      );
-
-      const loginResponse = await axios.post(
-        "https://geowhisper-aplikacja-inzynierka.onrender.com/login",
-        {
-          user: {
-            id: response.data.userId,
-            directionalNumber: values.directionalNumber,
-            phoneNumber: values.phoneNumber,
-            password: values.password,
-          },
-        }
-      );
+      await AsyncStorage.setItem("userId", response.data.userId);
+      const loginResponse = await axiosInstance.post("/login", {
+        user: {
+          id: response.data.userId,
+          directionalNumber: values.directionalNumber,
+          phoneNumber: values.phoneNumber,
+          password: values.password,
+        },
+      });
       if (loginResponse.data.message) {
         Toast.show({ type: "error", text1: loginResponse.data.message });
       } else if (loginResponse.data.userId) {
         await AsyncStorage.setItem("userId", loginResponse.data.userId);
+        formikHelpers.resetForm();
         router.replace("views/main-view");
       }
       return;
     } catch (eror) {
-      console.log(eror);
+      Toast.show({ type: "error", text1: "Bąd podczas logowania." });
     }
-    // router.replace("views/main-view");
   };
 
   return (
@@ -108,6 +97,10 @@ const LoginView = () => {
           style={{
             fontSize: 20,
             fontWeight: "bold",
+            color:
+              theme.appTheme === "light"
+                ? theme.themeDarkColor
+                : theme.themeLightColor,
             textShadowColor: "rgba(0, 0, 0, 0.5)",
             textShadowOffset: { width: 1, height: 1 },
             textShadowRadius: 3,
@@ -132,19 +125,16 @@ const LoginView = () => {
             .string()
             .matches(/^[0-9]{9}$/, "Numer telefonu musi mieć dokładnie 9 cyfr.")
             .required("Numer telefonu jest wymagany."),
-          password: yup
-            .string()
-            .min(8, "Hasło musi mieć conajmniej 8 znaków.")
-            .required("Hasło jest wymagane."),
+          password: yup.string().required("Hasło jest wymagane."),
         })}
       >
         {({
           values,
-          setFieldValue,
           handleBlur,
           touched,
           errors,
           submitForm,
+          handleChange,
         }) => (
           <View
             style={{
@@ -162,17 +152,29 @@ const LoginView = () => {
               }}
             >
               <View style={{ flex: 1.5 }}>
-                <Field
-                  as={TextInput}
-                  name="directionalNumber"
+                <TextInput
                   label="Nr kierunkowy"
-                  style={{ textAlign: "center", zIndex: 0 }}
-                  onChangeText={(value: string) =>
-                    setFieldValue("directionalNumber", value)
+                  style={{
+                    textAlign: "center",
+                    zIndex: 0,
+                    backgroundColor:
+                      theme.appTheme === "light"
+                        ? theme.themeLightColor
+                        : theme.themeDarkColor,
+                  }}
+                  textColor={
+                    theme.appTheme === "light"
+                      ? theme.themeDarkColor
+                      : theme.themeLightColor
                   }
-                  onBlur={() => handleBlur("directionalNumber")}
-                  value={values.directionalNumber}
-                  activeOutlineColor="#2196F3"
+                  onChangeText={handleChange("directionalNumber")}
+                  onBlur={handleBlur("directionalNumber")}
+                  value={
+                    values.directionalNumber
+                      ? String(values.directionalNumber)
+                      : ""
+                  }
+                  activeOutlineColor={theme.appMainColor}
                   mode="outlined"
                   keyboardType="numeric"
                   maxLength={3}
@@ -184,17 +186,25 @@ const LoginView = () => {
                 )}
               </View>
               <View style={{ flex: 2.5 }}>
-                <Field
-                  as={TextInput}
-                  style={{ textAlign: "center", zIndex: 0 }}
-                  name="phoneNumber"
-                  label="Numer telefonu"
-                  onChangeText={(value: string) =>
-                    setFieldValue("phoneNumber", value)
+                <TextInput
+                  style={{
+                    textAlign: "center",
+                    zIndex: 0,
+                    backgroundColor:
+                      theme.appTheme === "light"
+                        ? theme.themeLightColor
+                        : theme.themeDarkColor,
+                  }}
+                  textColor={
+                    theme.appTheme === "light"
+                      ? theme.themeDarkColor
+                      : theme.themeLightColor
                   }
+                  label="Numer telefonu"
+                  onChangeText={handleChange("phoneNumber")}
                   onBlur={handleBlur("phoneNumber")}
-                  value={values.phoneNumber?.toString()}
-                  activeOutlineColor="#2196F3"
+                  value={values.phoneNumber ? String(values.phoneNumber) : ""}
+                  activeOutlineColor={theme.appMainColor}
                   mode="outlined"
                   keyboardType="numeric"
                   maxLength={9}
@@ -205,18 +215,26 @@ const LoginView = () => {
               </View>
             </View>
             <View>
-              <Field
-                as={TextInput}
-                name="password"
+              <TextInput
                 label="Hasło"
-                style={{ textAlign: "center", zIndex: 0 }}
-                onChangeText={(value: string) =>
-                  setFieldValue("password", value)
+                style={{
+                  textAlign: "center",
+                  zIndex: 0,
+                  backgroundColor:
+                    theme.appTheme === "light"
+                      ? theme.themeLightColor
+                      : theme.themeDarkColor,
+                }}
+                textColor={
+                  theme.appTheme === "light"
+                    ? theme.themeDarkColor
+                    : theme.themeLightColor
                 }
-                onBlur={() => handleBlur("password")}
-                value={values.password}
+                onChangeText={handleChange("password")}
+                onBlur={handleBlur("password")}
+                value={values.password ? String(values.password) : ""}
                 secureTextEntry={true}
-                activeOutlineColor="#2196F3"
+                activeOutlineColor={theme.appMainColor}
                 mode="outlined"
               />
               {touched.password && !!errors.password && (
@@ -234,7 +252,7 @@ const LoginView = () => {
                 mode="contained"
                 onPress={submitForm}
                 style={{
-                  backgroundColor: "#2196F3",
+                  backgroundColor: theme.appMainColor,
                   width: "40%",
                   borderRadius: 5,
                 }}
@@ -247,18 +265,38 @@ const LoginView = () => {
       </Formik>
       <View style={{ display: "flex", alignItems: "center", marginTop: 40 }}>
         <Pressable onPress={openForgotPasswordModal}>
-          <Text style={{ color: "#2196F3" }}>Zapomniałeś/aś hasła?</Text>
+          <Text style={{ color: theme.appMainColor }}>
+            Zapomniałeś/aś hasła?
+          </Text>
         </Pressable>
         <View style={{ display: "flex", alignItems: "center", marginTop: 40 }}>
-          <Text style={{ fontWeight: "bold" }}>Nie masz konta?</Text>
-          <Text style={{ fontWeight: "bold", marginBottom: 20 }}>
+          <Text
+            style={{
+              fontWeight: "bold",
+              color:
+                theme.appTheme === "light"
+                  ? theme.themeDarkColor
+                  : theme.themeLightColor,
+            }}
+          >
+            Nie masz konta?
+          </Text>
+          <Text
+            style={{
+              fontWeight: "bold",
+              marginBottom: 20,
+              color:
+                theme.appTheme === "light"
+                  ? theme.themeDarkColor
+                  : theme.themeLightColor,
+            }}
+          >
             Kliknij w przycisk poniżej, aby się zarejestrować
           </Text>
-          {/* TODO: handle register */}
           <Button
             mode="contained"
             style={{
-              backgroundColor: "#2196F3",
+              backgroundColor: theme.appMainColor,
               width: "40%",
               borderRadius: 5,
             }}
@@ -275,6 +313,10 @@ const LoginView = () => {
           open={forgotPasswordDialog}
           onClose={closeForgotPasswordModal}
           handleConfirm={closeForgotPasswordModal}
+          appTheme={theme.appTheme}
+          appMainColor={theme.appMainColor}
+          appDarkThemeColor={theme.themeDarkColor}
+          appLightThemeColor={theme.themeLightColor}
         />
       )}
     </View>

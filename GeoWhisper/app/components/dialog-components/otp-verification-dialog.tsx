@@ -1,3 +1,4 @@
+import { useTheme } from "app/utils/theme-provider";
 import { Field, Formik } from "formik";
 import { FC, useState } from "react";
 import { View, Text } from "react-native";
@@ -15,7 +16,7 @@ const OtpVerificationDialogDialog: FC<OtpVerificationDialogDialogProps> = ({
   handleConfirm,
 }) => {
   const [otpCode, setOtpCode] = useState("");
-
+  const theme = useTheme();
   return (
     <Modal visible={open} onDismiss={onClose}>
       <Card
@@ -24,6 +25,8 @@ const OtpVerificationDialogDialog: FC<OtpVerificationDialogDialogProps> = ({
           alignSelf: "center",
           display: "flex",
           alignItems: "center",
+          backgroundColor:
+            theme.appTheme === "light" ? "white" : theme.themeModalDarkColor,
         }}
       >
         <View
@@ -44,7 +47,7 @@ const OtpVerificationDialogDialog: FC<OtpVerificationDialogDialogProps> = ({
         <View style={{ marginBottom: 20, display: "flex" }}>
           <TextInput
             mode="outlined"
-            activeOutlineColor="#2196F3"
+            activeOutlineColor={theme.appMainColor}
             placeholder="Wpisz kod"
             label="Kod"
             value={otpCode}
@@ -71,7 +74,7 @@ const OtpVerificationDialogDialog: FC<OtpVerificationDialogDialogProps> = ({
           </Button>
           <Button
             mode="contained"
-            buttonColor="#2196F3"
+            buttonColor={theme.appMainColor}
             style={{ borderRadius: 5 }}
             onPress={() => handleConfirm(otpCode)}
           >

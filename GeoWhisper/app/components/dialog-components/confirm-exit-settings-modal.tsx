@@ -5,19 +5,18 @@ import { View, Text } from "react-native";
 import { Button, Card, Modal, TextInput } from "react-native-paper";
 import * as yup from "yup";
 
-interface ConfirmExitChatDialogProps {
+interface ConfirmExitSettingsDialogProps {
   open: boolean;
   onClose: () => void;
   handleConfirm: () => void;
   message: string;
 }
-const ConfirmExitChatDialog: FC<ConfirmExitChatDialogProps> = ({
+const ConfirmExitSettingsDialog: FC<ConfirmExitSettingsDialogProps> = ({
   open,
   onClose,
   handleConfirm,
   message,
 }) => {
-  // TODO: Add handle click function to get users to chat
   const theme = useTheme();
   return (
     <Modal visible={open} onDismiss={onClose}>
@@ -59,7 +58,7 @@ const ConfirmExitChatDialog: FC<ConfirmExitChatDialogProps> = ({
             style={{ borderRadius: 5 }}
             onPress={onClose}
           >
-            <Text style={{ color: "black" }}>Zamknij</Text>
+            <Text style={{ color: "black" }}>Anuluj</Text>
           </Button>
           <Button
             mode="contained"
@@ -74,4 +73,4 @@ const ConfirmExitChatDialog: FC<ConfirmExitChatDialogProps> = ({
     </Modal>
   );
 };
-export default ConfirmExitChatDialog;
+export default ConfirmExitSettingsDialog;

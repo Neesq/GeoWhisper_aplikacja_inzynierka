@@ -1,3 +1,4 @@
+import { useTheme } from "app/utils/theme-provider";
 import { FC } from "react";
 import { View, Text } from "react-native";
 import { Button, Card, Chip, Dialog, Modal } from "react-native-paper";
@@ -14,14 +15,15 @@ const UserNameDialog: FC<UserNameDialogProps> = ({
   handleConfirm,
   userName,
 }) => {
-  // TODO: Add handle click function to get users to chat
-
+  const theme = useTheme();
   return (
     <Modal visible={open} onDismiss={onClose}>
       <Card
         style={{
           width: "80%",
           alignSelf: "center",
+          backgroundColor:
+            theme.appTheme === "light" ? "white" : theme.themeModalDarkColor,
         }}
       >
         <View style={{ display: "flex", alignItems: "center" }}>
@@ -40,7 +42,9 @@ const UserNameDialog: FC<UserNameDialogProps> = ({
             </Text>
           </View>
           <View style={{ marginBottom: 20 }}>
-            <Chip style={{ backgroundColor: "#2196F3", borderRadius: 50 }}>
+            <Chip
+              style={{ backgroundColor: theme.appMainColor, borderRadius: 50 }}
+            >
               <Text style={{ color: "white" }}>{userName}</Text>
             </Chip>
           </View>
@@ -62,7 +66,7 @@ const UserNameDialog: FC<UserNameDialogProps> = ({
             </Button>
             <Button
               mode="contained"
-              buttonColor="#2196F3"
+              buttonColor={theme.appMainColor}
               style={{ borderRadius: 5 }}
               onPress={handleConfirm}
             >

@@ -6,11 +6,32 @@ import Toast from "react-native-toast-message";
 import { ThemeProvider } from "./utils/theme-provider";
 import axios from "axios";
 import { socket } from "./utils/socket";
+import { axiosInstance } from "./utils/axios-instance";
+import bcrypt from "bcryptjs";
+import isaac from "isaac";
+
+bcrypt.setRandomFallback((len: number) => {
+  const buf = new Uint8Array(len);
+  isaac.rand();
+  return Array.from(buf);
+});
+
+socket.on("disconnect", (reason) => {
+  if (reason === "io server disconnect") {
+    socket.connect();
+  }
+});
 
 const AppLayout = () => {
   const [userId, setUserId] = useState("");
   const [currentLocation, setCurrentLocation] =
     useState<Location.LocationObject | null>(null);
+
+  useEffect(() => {
+    return () => {
+      console.log("app closed");
+    };
+  }, []);
 
   useEffect(() => {
     socket.connect();
@@ -57,7 +78,6 @@ const AppLayout = () => {
         }
       );
     } catch (error) {
-      console.log(error);
       Toast.show({ type: "error", text1: "Błąd przy pobieraniu lokalizacji." });
     }
   };
@@ -67,14 +87,11 @@ const AppLayout = () => {
       const updateLocationOnChange = async () => {
         const { longitude, latitude } = currentLocation.coords;
         if (longitude && latitude && userId) {
-          await axios.post(
-            "https://geowhisper-aplikacja-inzynierka.onrender.com/update-location",
-            {
-              userId: userId,
-              longitude: longitude,
-              latitude: latitude,
-            }
-          );
+          await axiosInstance.post("/update-location", {
+            userId: userId,
+            longitude: longitude,
+            latitude: latitude,
+          });
         }
       };
       updateLocationOnChange();

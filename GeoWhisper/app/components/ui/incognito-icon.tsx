@@ -1,3 +1,4 @@
+import { useTheme } from "app/utils/theme-provider";
 import { FC } from "react";
 import { View, StyleSheet, Pressable } from "react-native";
 import { Icon, Text } from "react-native-paper";
@@ -7,6 +8,7 @@ interface IncognitoIconProps {
 }
 
 export const IncognitoIcon: FC<IncognitoIconProps> = ({ handleClick }) => {
+  const theme = useTheme();
   return (
     <View
       style={{
@@ -15,7 +17,7 @@ export const IncognitoIcon: FC<IncognitoIconProps> = ({ handleClick }) => {
         alignItems: "center",
         backgroundColor: "#dddddd",
         borderRadius: 180,
-        borderColor: "#2196F3",
+        borderColor: theme.appMainColor,
         borderWidth: 10,
         shadowColor: "black",
         shadowOffset: { width: 100, height: 10 },

@@ -7,11 +7,13 @@ import axios from "axios";
 import { router } from "expo-router";
 import { useEffect, useState } from "react";
 import { Pressable, View } from "react-native";
-import { Icon, RadioButton, Text } from "react-native-paper";
+import { ActivityIndicator, Icon, RadioButton, Text } from "react-native-paper";
 import Toast from "react-native-toast-message";
 import UserNameDialog from "./components/user-name-dialog";
 import { socket } from "app/utils/socket";
 import ConfirmChatDialog from "app/components/dialog-components/confirm-chat-dialog";
+import { axiosInstance } from "app/utils/axios-instance";
+import { useTheme } from "app/utils/theme-provider";
 
 const MainView = () => {
   const [numberOfChats, setNumberOfChats] = useState<{
@@ -25,7 +27,40 @@ const MainView = () => {
   const [invitationFromUser, setInvitationFromUser] = useState<string | null>(
     null
   );
+  const [userId, setUserId] = useState<string | null>(null);
+  const [invitationUserName, setnvitationUserName] = useState<string | null>(
+    null
+  );
   const [userName, setUserName] = useState("");
+  const theme = useTheme();
+
+  useEffect(() => {
+    const fetchThemeFromDatabase = async () => {
+      try {
+        const userId = await AsyncStorage.getItem("userId");
+        if (userId) {
+          const themeData = await axiosInstance.post("/user-settings-fetch", {
+            userId: userId,
+          });
+          if (themeData.data) {
+            theme.updateTheme({
+              appTheme: themeData.data.appTheme,
+              appMainColor: themeData.data.appMainColor,
+              themeLoaded: true,
+            });
+          }
+        } else {
+          theme.updateTheme({
+            themeLoaded: true,
+          });
+        }
+      } catch (error) {
+        console.error("Błąd pobierania motywu z bazy danych:", error);
+      }
+    };
+    fetchThemeFromDatabase();
+  }, []);
+
   const openProfileModal = () => {
     setIsProfileModalOpen(true);
   };
@@ -39,70 +74,89 @@ const MainView = () => {
     setInviteModalOpen(false);
   };
 
+  const getUserId = async () => {
+    const userId = await AsyncStorage.getItem("userId");
+    setUserId(userId);
+  };
+
+  useEffect(() => {
+    if (!userId) {
+      getUserId();
+    }
+  }, [userId]);
+
   const mapUser = async () => {
     if (!userMapped) {
-      const userId = await AsyncStorage.getItem("userId");
       socket.emit("mapUserId", userId);
       setUserMapped(true);
     }
   };
   useEffect(() => {
     mapUser();
-  }, [userMapped]);
+  }, [userMapped, userId]);
 
   const handleUserAvailable = async () => {
-    const userId = await AsyncStorage.getItem("userId");
     try {
-      await axios.post(
-        "https://geowhisper-aplikacja-inzynierka.onrender.com/user-availabilty-status",
-        {
+      if (userId) {
+        await axiosInstance.post("/user-availabilty-status", {
           userId: userId,
           available: true,
-        }
-      );
+        });
+      }
       return;
     } catch (error) {
-      console.log(error);
       Toast.show({ type: "error", text1: "Błąd zmiany statusu użytkownika" });
     }
   };
 
   useEffect(() => {
     handleUserAvailable();
-  }, [handleUserAvailable]);
+  }, [handleUserAvailable, userId]);
 
-  socket.on("invitationRecieved", (invitationRecieved: string) => {
+  socket.on("invitationRecieved", async (invitationRecieved: string) => {
+    try {
+      const response = await axiosInstance.get(
+        `/get-user-name/${invitationRecieved}`
+      );
+      if (response.data.userName) {
+        setnvitationUserName(response.data.userName);
+      }
+    } catch (error) {}
     setInvitationFromUser(invitationRecieved);
     openInviteModal();
   });
 
-  const acceptDenyInvitation = (accept: boolean) => {
-    socket.emit("acceptDenyInvitation", {
-      to: invitationFromUser,
-      accepted: accept,
-    });
-    closeInviteModal();
-    if (accept) {
-      router.push("views/chat-views/chat-view");
+  const acceptDenyInvitation = async (accept: boolean) => {
+    if (userId) {
+      socket.emit("acceptDenyInvitation", {
+        to: invitationFromUser,
+        from: userId,
+        accepted: accept,
+      });
+      closeInviteModal();
+      if (accept) {
+        router.push({
+          pathname: "views/chat-views/chat-view",
+          params: { invitedUser: invitationFromUser },
+        });
+      }
     }
   };
 
   const handleChangeUserName = async () => {
     try {
-      const userId = await AsyncStorage.getItem("userId");
-      const newUserName = generateUserName();
-      const response = await axios.post(
-        "https://geowhisper-aplikacja-inzynierka.onrender.com/change-user-name",
-        {
+      if (userId) {
+        const newUserName = generateUserName();
+        const response = await axiosInstance.post("/change-user-name", {
           userId: userId,
           userName: newUserName,
-        }
-      );
+        });
 
-      if (!response.data.message) {
-        setUserName(newUserName);
-      } else {
-        Toast.show({ type: "error", text1: response.data.message });
+        if (!response.data.message) {
+          setUserName(newUserName);
+        } else {
+          Toast.show({ type: "error", text1: response.data.message });
+        }
       }
     } catch (error) {
       Toast.show({ type: "error", text1: "Błąd zmiany nazwy użytkownika" });
@@ -111,11 +165,7 @@ const MainView = () => {
 
   useEffect(() => {
     const getUserName = async () => {
-      const userId = await AsyncStorage.getItem("userId");
-      const userName = await axios.get(
-        `https://geowhisper-aplikacja-inzynierka.onrender.com/get-user-name/${userId}`
-      );
-
+      const userName = await axiosInstance.get(`/get-user-name/${userId}`);
       if (userName.data.userName) {
         setUserName(userName.data.userName);
       } else if (userName.data.message) {
@@ -125,12 +175,12 @@ const MainView = () => {
     if (!userName) {
       getUserName();
     }
-  }, []);
+  }, [userId]);
 
   useEffect(() => {
     navigation.setOptions({
       headerStyle: {
-        backgroundColor: "#2196F3",
+        backgroundColor: theme.appMainColor,
       },
       headerTitle: () => <AppHeaderTitle />,
       headerLeft: () => (
@@ -149,38 +199,37 @@ const MainView = () => {
       headerTitleAlign: "center",
       headerBackVisible: false,
     });
-  }, [navigation, profileModalOpen]);
+  }, [navigation, profileModalOpen, theme]);
 
   const handleSearchChats = async () => {
     try {
       if (numberOfChats.single) {
-        const userId = await AsyncStorage.getItem("userId");
-        const response = await axios.post<
-          { userId: string; userName: string }[] | null
-        >(
-          "https://geowhisper-aplikacja-inzynierka.onrender.com/get-users-to-chat",
-          {
+        if (userId) {
+          const response = await axiosInstance.post<
+            { userId: string; userName: string }[] | null
+          >("/get-users-to-chat", {
             userId: userId,
             oneChat: numberOfChats.single,
-          }
-        );
+          });
 
-        if (response.data?.length) {
-          console.log(response.data[0].userId);
-          await AsyncStorage.setItem("invitedUserId", response.data[0].userId);
-          socket.emit("sendInvite", {
-            from: userId,
-            to: response.data[0].userId,
-          });
-          router.push("views/chat-views/awaiting-chat-view");
+          if (response.data?.length) {
+            socket.emit("sendInvite", {
+              from: userId,
+              to: response.data[0].userId,
+            });
+            router.push({
+              pathname: "views/chat-views/awaiting-chat-view",
+              params: { invitedUser: response.data[0].userId },
+            });
+          } else {
+            Toast.show({
+              type: "info",
+              text1: "Brak dostępnych użytkowników w okolicy.",
+            });
+          }
         } else {
-          Toast.show({
-            type: "info",
-            text1: "Brak dostępnych użytkowników w okolicy.",
-          });
+          router.push("views/chat-views/chat-list-view");
         }
-      } else {
-        router.push("views/chat-views/chat-list-view");
       }
     } catch (error) {
       Toast.show({
@@ -190,9 +239,32 @@ const MainView = () => {
     }
   };
 
+  if (!userId)
+    return (
+      <View
+        style={{
+          display: "flex",
+          width: "100%",
+          height: "100%",
+          justifyContent: "center",
+          alignContent: "center",
+        }}
+      >
+        <ActivityIndicator />
+      </View>
+    );
+
   return (
     <>
-      <View>
+      <View
+        style={{
+          backgroundColor:
+            theme.appTheme === "light"
+              ? theme.themeLightColor
+              : theme.themeDarkColor,
+          height: "100%",
+        }}
+      >
         <View
           style={{
             display: "flex",
@@ -212,11 +284,23 @@ const MainView = () => {
               textShadowOffset: { width: 1, height: 1 },
               textShadowRadius: 3,
               textAlign: "center",
+              color:
+                theme.appTheme === "light"
+                  ? theme.themeDarkColor
+                  : theme.themeLightColor,
             }}
           >
             Kliknij aby wylosować czat
           </Text>
-          <Icon source="arrow-down" size={100} />
+          <Icon
+            source="arrow-down"
+            size={100}
+            color={
+              theme.appTheme === "light"
+                ? theme.themeDarkColor
+                : theme.themeLightColor
+            }
+          />
           <IncognitoIcon
             handleClick={() => {
               handleSearchChats();
@@ -242,13 +326,23 @@ const MainView = () => {
           >
             <RadioButton
               value="first"
-              color="#2196F3"
+              color={theme.appMainColor}
               status={numberOfChats.single ? "checked" : "unchecked"}
               onPress={() =>
                 setNumberOfChats({ single: true, multiple: false })
               }
             />
-            <Text style={{ fontSize: 20 }}>Jeden czat</Text>
+            <Text
+              style={{
+                fontSize: 20,
+                color:
+                  theme.appTheme === "light"
+                    ? theme.themeDarkColor
+                    : theme.themeLightColor,
+              }}
+            >
+              Jeden czat
+            </Text>
           </View>
 
           <View
@@ -261,14 +355,24 @@ const MainView = () => {
           >
             <RadioButton
               value="second"
-              color="#2196F3"
+              color={theme.appMainColor}
               status={numberOfChats.multiple ? "checked" : "unchecked"}
               onPress={() =>
                 setNumberOfChats({ single: false, multiple: true })
               }
             />
 
-            <Text style={{ fontSize: 20 }}>Wiele czatów</Text>
+            <Text
+              style={{
+                fontSize: 20,
+                color:
+                  theme.appTheme === "light"
+                    ? theme.themeDarkColor
+                    : theme.themeLightColor,
+              }}
+            >
+              Wiele czatów
+            </Text>
           </View>
         </View>
       </View>
@@ -283,7 +387,7 @@ const MainView = () => {
       {inviteModalOpen && (
         <ConfirmChatDialog
           handleConfirm={() => acceptDenyInvitation(true)}
-          userName={invitationFromUser!}
+          userName={invitationUserName!}
           onClose={() => acceptDenyInvitation(false)}
           open={inviteModalOpen}
         />

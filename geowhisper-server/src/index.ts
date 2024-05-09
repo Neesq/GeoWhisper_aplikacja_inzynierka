@@ -42,7 +42,6 @@ interface CustomRequest<T, U extends Query> extends Request {
 }
 
 app.get("/", (req: Request, res: Response) => {
-  console.log("WITAM");
   res.send("Express + TypeScript Server");
 });
 
@@ -66,6 +65,22 @@ app.post(
       const { user } = req.body;
 
       if (!user.id) {
+        const isUserLoggedIn = await prisma.user.findFirst({
+          where: {
+            directionalNumber: Number(user.directionalNumber),
+            phoneNumber: Number(user.phoneNumber),
+          },
+          select: {
+            isOnline: true,
+          },
+        });
+
+        if (isUserLoggedIn?.isOnline) {
+          return res
+            .status(200)
+            .json({ message: "Ten użytkownik jest już zalogowany." });
+        }
+        console.log(isUserLoggedIn);
         const usersData = await prisma.user.findMany({
           where: {
             directionalNumber: Number(user.directionalNumber),
@@ -93,9 +108,30 @@ app.post(
         }
         return;
       } else {
+        const isUserLoggedIn = await prisma.user.findFirst({
+          where: {
+            id: user.id,
+            phoneNumber: Number(user.phoneNumber),
+            directionalNumber: Number(user.directionalNumber),
+          },
+          select: {
+            isOnline: true,
+          },
+        });
+
+        console.log(isUserLoggedIn);
+
+        if (isUserLoggedIn?.isOnline) {
+          return res
+            .status(200)
+            .json({ message: "Ten użytkownik jest już zalogowany." });
+        }
+
         const userData = await prisma.user.findUnique({
           where: {
             id: user.id,
+            phoneNumber: Number(user.phoneNumber),
+            directionalNumber: Number(user.directionalNumber),
           },
         });
         if (userData) {
@@ -178,6 +214,18 @@ app.post(
         throw Error("Brak hasła");
       }
 
+      const userExists = await prisma.user.findFirst({
+        where: {
+          phoneNumber: Number(user.password),
+          directionalNumber: Number(user.directionalNumber),
+        },
+      });
+
+      if (userExists)
+        return res
+          .status(200)
+          .json({ message: "Taki numer telefonu jest już zarejestrowany." });
+
       const createdUser = await prisma.user.create({
         data: {
           id: userId,
@@ -247,11 +295,12 @@ app.post(
 app.get(
   "/get-user-name/:userId",
   async (
-    req: CustomRequest<ChangeUserNameRequest, { userId: string }>,
+    req: CustomRequest<any, { userId: string }>,
     res: Response<{ message: string } | { userName: string }>
   ) => {
     try {
       const { userId } = req.params;
+      console.log(userId);
       if (!userId)
         return res.status(200).json({ message: "Brak id użytkownika." });
       const getUserName = await prisma.user.findUnique({
@@ -266,6 +315,34 @@ app.get(
         return res.status(200).json({ message: "Nie znaleziono użytkownika." });
 
       res.status(200).json({ userName: getUserName?.name });
+    } catch (error) {
+      console.error("Error changing user name:", error);
+      throw error;
+    }
+  }
+);
+app.get(
+  "/logout/:userId",
+  async (
+    req: CustomRequest<any, { userId: string }>,
+    res: Response<{ message: string } | { userName: string }>
+  ) => {
+    try {
+      const { userId } = req.params;
+
+      console.log(userId);
+      if (!userId)
+        return res.status(200).json({ message: "Brak id użytkownika." });
+      await prisma.user.update({
+        where: {
+          id: userId,
+        },
+        data: {
+          isOnline: false,
+        },
+      });
+
+      res.status(200).send();
     } catch (error) {
       console.error("Error changing user name:", error);
       throw error;
@@ -465,6 +542,68 @@ app.post(
   }
 );
 
+interface UserSettingsRequest {
+  userId: string;
+  searchRadius: number;
+  numberOfChats: number;
+  languagePrefference: string;
+  appTheme: string;
+  appMainColor: string;
+}
+
+app.post(
+  "/user-settings-save",
+  async (req: CustomRequest<UserSettingsRequest, any>, res: Response) => {
+    try {
+      const { userId, ...restData } = req.body;
+
+      if (!userId) throw Error("Brak id użytkownika");
+
+      await prisma.settings.update({
+        where: {
+          userId,
+        },
+        data: restData,
+      });
+
+      res.status(200).json({ success: true });
+    } catch (error) {
+      console.error("Error updating user availablity:", error);
+      throw error;
+    }
+  }
+);
+app.post(
+  "/user-settings-fetch",
+  async (
+    req: CustomRequest<Pick<UserSettingsRequest, "userId">, any>,
+    res: Response<Omit<UserSettingsRequest, "userId">>
+  ) => {
+    try {
+      const { userId } = req.body;
+      if (!userId) throw Error("Brak id użytkownika");
+
+      const userSettings = await prisma.settings.findUnique({
+        where: { userId },
+        select: {
+          appMainColor: true,
+          appTheme: true,
+          languagePrefference: true,
+          numberOfChats: true,
+          searchRadius: true,
+        },
+      });
+
+      if (!userSettings) throw new Error("Nie znaleziono ustawień");
+
+      res.status(200).json(userSettings);
+    } catch (error) {
+      console.error("Error updating user availablity:", error);
+      throw error;
+    }
+  }
+);
+
 // app.listen(port, () => {
 //   console.log(`[server]: Server is running at http://localhost:${port}`);
 // });
@@ -483,25 +622,68 @@ const setUserOnlineState = async (userId: string, state: boolean) => {
   });
 };
 
-io.on("connection", (socket: Socket) => {
+io.on("connection", async (socket: Socket) => {
   console.log("A user connected");
 
-  socket.on("mapUserId", (userId: string) => {
-    console.log(`Mapping user ${userId} to socket ${socket.id}`);
-    setUserOnlineState(userId, true);
-    userIdToSocketId[userId] = socket.id;
-  });
-
-  socket.on("sendInvite", (invitationData: { from: string; to: string }) => {
-    const { from, to } = invitationData;
-    io.to(userIdToSocketId[to]).emit("invitationRecieved", from);
+  socket.on("mapUserId", async (userId: string) => {
+    if (!userIdToSocketId[userId]) {
+      console.log(`Mapping user ${userId} to socket ${socket.id}`);
+      await setUserOnlineState(userId, true);
+      userIdToSocketId[userId] = socket.id;
+      console.log("usersMapped", userIdToSocketId);
+    }
   });
 
   socket.on(
+    "sendInvite",
+    async (invitationData: { from: string; to: string }) => {
+      const { from, to } = invitationData;
+
+      const checkInvitedUser = await prisma.user.findUnique({
+        where: {
+          id: userIdToSocketId[to],
+        },
+        select: {
+          isAvailable: true,
+        },
+      });
+      if (!checkInvitedUser?.isAvailable) {
+        socket.emit("userUnavailable", {
+          message: "Zaproszony użytkownik jest zajęty.",
+        });
+      } else {
+        await prisma.user.updateMany({
+          where: {
+            id: {
+              in: [userIdToSocketId[to], userIdToSocketId[from]],
+            },
+          },
+          data: {
+            isAvailable: false,
+          },
+        });
+        io.to(userIdToSocketId[to]).emit("invitationRecieved", from);
+      }
+    }
+  );
+
+  socket.on(
     "acceptDenyInvitation",
-    (data: { to: string; accepted: boolean }) => {
-      const { accepted, to } = data;
+    async (data: { to: string; from: string; accepted: boolean }) => {
+      const { accepted, to, from } = data;
       io.to(userIdToSocketId[to]).emit("inviteDecision", accepted);
+      if (!accepted) {
+        await prisma.user.updateMany({
+          where: {
+            id: {
+              in: [userIdToSocketId[to], userIdToSocketId[from]],
+            },
+          },
+          data: {
+            isAvailable: false,
+          },
+        });
+      }
     }
   );
 
@@ -526,64 +708,48 @@ io.on("connection", (socket: Socket) => {
     }
   );
 
-  let intervalId: NodeJS.Timeout | null = null;
-  socket.on("stopRangeCheck", () => {
-    if (intervalId) {
-      clearInterval(intervalId);
-    }
-  });
   socket.on(
-    "startRangeCheck",
-    (rangeCheckData: { userId: string; userIdToCheck: string }) => {
+    "rangeCheck",
+    async (rangeCheckData: { userId: string; userIdToCheck: string }) => {
       const { userId, userIdToCheck } = rangeCheckData;
-      intervalId = setInterval(async () => {
-        try {
-          const userLocation = await prisma.user.findUnique({
-            where: {
-              id: userId,
-            },
-            select: {
-              longitude: true,
-              latitude: true,
-              settings: {
-                select: {
-                  searchRadius: true,
-                },
+      try {
+        const userLocation = await prisma.user.findUnique({
+          where: {
+            id: userId,
+          },
+          select: {
+            longitude: true,
+            latitude: true,
+            settings: {
+              select: {
+                searchRadius: true,
               },
             },
-          });
-          console.log(userLocation);
-          if (!userLocation) throw new Error("Error fetching user location.");
-
-          const rangeInDegrees = userLocation.settings?.searchRadius! / 111000;
-          const stillInRange = await prisma.user.findUnique({
-            where: {
-              id: userIdToCheck,
-              latitude: {
-                gte: Number(userLocation.latitude) - rangeInDegrees,
-                lte: Number(userLocation.latitude) + rangeInDegrees,
-              },
-              longitude: {
-                gte: Number(userLocation.longitude) - rangeInDegrees,
-                lte: Number(userLocation.longitude) + rangeInDegrees,
-              },
+          },
+        });
+        if (!userLocation) throw new Error("Error fetching user location.");
+        const rangeInDegrees = userLocation.settings?.searchRadius! / 111000;
+        const stillInRange = await prisma.user.findUnique({
+          where: {
+            id: userIdToCheck,
+            latitude: {
+              gte: Number(userLocation.latitude) - rangeInDegrees,
+              lte: Number(userLocation.latitude) + rangeInDegrees,
             },
-          });
-
-          if (stillInRange) {
-            console.log("witam");
-            io.to(socket.id).emit("userInRange", true);
-          } else {
-            io.to(socket.id).emit("userOutOfRange", false);
-          }
-        } catch (error) {
-          console.error("Error checking user range:", error);
-          io.to(socket.id).emit(
-            "error",
-            "An error occurred while checking user range."
-          );
-        }
-      }, 5000);
+            longitude: {
+              gte: Number(userLocation.longitude) - rangeInDegrees,
+              lte: Number(userLocation.longitude) + rangeInDegrees,
+            },
+          },
+        });
+        io.to(socket.id).emit("userInRange", !!stillInRange);
+      } catch (error) {
+        console.error("Error checking user range:", error);
+        io.to(socket.id).emit(
+          "error",
+          "An error occurred while checking user range."
+        );
+      }
     }
   );
 
@@ -591,13 +757,15 @@ io.on("connection", (socket: Socket) => {
     io.to(userIdToSocketId[to]).emit("chatEnded", true);
   });
 
-  socket.on("disconnect", () => {
-    console.log("User disconnected");
+  await new Promise((resolve) => setTimeout(resolve, 3000));
+
+  socket.on("disconnect", async () => {
     const userId = Object.keys(userIdToSocketId).find(
       (key) => userIdToSocketId[key] === socket.id
     );
+    console.log("User disconnected: ", userId);
     if (userId) {
-      setUserOnlineState(userId, false);
+      await setUserOnlineState(userId, false);
       console.log(`Deleting mapping for user ${userId}`);
       delete userIdToSocketId[userId];
     }

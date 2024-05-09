@@ -1,15 +1,18 @@
+import AsyncStorage from "@react-native-async-storage/async-storage";
 import OtpVerificationDialogDialog from "app/components/dialog-components/otp-verification-dialog";
 import { AppHeaderTitle } from "app/components/ui/app-header-title";
+import { axiosInstance } from "app/utils/axios-instance";
+import { generateUserName } from "app/utils/generate-user-name";
+import { KeepLoggedIn } from "app/utils/keep-logged-in-enum";
+import { useTheme } from "app/utils/theme-provider";
+import bcrypt from "bcryptjs";
 import { router, useNavigation } from "expo-router";
-import { Field, Formik, FormikHelpers } from "formik";
+import { Formik, FormikHelpers } from "formik";
 import { useEffect, useState } from "react";
-import bcrypt from "react-native-bcrypt";
 import { Pressable, View } from "react-native";
 import { Button, Icon, Text, TextInput } from "react-native-paper";
-import { v4 as uuidv4 } from "uuid";
+import Toast from "react-native-toast-message";
 import * as yup from "yup";
-import axios from "axios";
-import { generateUserName } from "app/utils/generate-user-name";
 
 interface RegisterValues {
   directionalNumber: number | null;
@@ -37,6 +40,7 @@ const RegisterView = () => {
     password: "",
   });
   const navigation = useNavigation();
+  const theme = useTheme();
 
   const openOtpVerifictationDialog = () => {
     setOtpVerificationDialog(true);
@@ -48,7 +52,7 @@ const RegisterView = () => {
   useEffect(() => {
     navigation.setOptions({
       headerStyle: {
-        backgroundColor: "#2196F3",
+        backgroundColor: theme.appMainColor,
       },
       headerTitle: () => <AppHeaderTitle />,
       headerLeft: () => (
@@ -59,22 +63,27 @@ const RegisterView = () => {
       headerTitleAlign: "center",
       headerBackVisible: false,
     });
-  }, [navigation]);
+  }, [navigation, theme]);
 
   const handleRegister = async (code: string) => {
     if (Number(sentCode) === Number(code)) {
-      await axios.post(
-        "https://geowhisper-aplikacja-inzynierka.onrender.com/register",
-        {
-          user: {
-            name: userData.name,
-            directionalNumber: userData.directionalNumber,
-            phoneNumber: userData.phoneNumber,
-            password: userData.password,
-          },
-        }
-      );
-      router.replace("views/login-register-view/login-view");
+      const response = await axiosInstance.post("/register", {
+        user: {
+          name: userData.name,
+          directionalNumber: userData.directionalNumber,
+          phoneNumber: userData.phoneNumber,
+          password: userData.password,
+        },
+      });
+      await AsyncStorage.setItem("keepLoggedIn", KeepLoggedIn.False);
+      if (response.data.userId) {
+        Toast.show({
+          type: "success",
+          text1: "Pomyślnie zarejestrowano konto.",
+        });
+        await AsyncStorage.setItem("userId", response.data.userId);
+        router.replace("views/login-register-view/login-view");
+      }
     }
   };
 
@@ -90,8 +99,8 @@ const RegisterView = () => {
         directionalNumber: values.directionalNumber,
         phoneNumber: values.phoneNumber,
       });
-      const response = await axios.post<{ code: string }>(
-        "https://geowhisper-aplikacja-inzynierka.onrender.com/send-code",
+      const response = await axiosInstance.post<{ code: string }>(
+        "/send-code",
         {
           phoneNumber: values.phoneNumber,
           directionalNumber: values.directionalNumber,
@@ -106,7 +115,15 @@ const RegisterView = () => {
   };
   return (
     <>
-      <View>
+      <View
+        style={{
+          backgroundColor:
+            theme.appTheme === "light"
+              ? theme.themeLightColor
+              : theme.themeDarkColor,
+          height: "100%",
+        }}
+      >
         <View style={{ width: "100%", marginTop: 40, marginBottom: 40 }}>
           <Text
             style={{
@@ -116,6 +133,10 @@ const RegisterView = () => {
               textShadowOffset: { width: 1, height: 1 },
               textShadowRadius: 3,
               textAlign: "center",
+              color:
+                theme.appTheme === "light"
+                  ? theme.themeDarkColor
+                  : theme.themeLightColor,
             }}
           >
             Zrejestruj nowe konto
@@ -158,11 +179,11 @@ const RegisterView = () => {
         >
           {({
             values,
-            setFieldValue,
             handleBlur,
             touched,
             errors,
             submitForm,
+            handleChange,
           }) => {
             return (
               <View
@@ -181,17 +202,29 @@ const RegisterView = () => {
                   }}
                 >
                   <View style={{ flex: 1.5 }}>
-                    <Field
-                      as={TextInput}
-                      name="directionalNumber"
+                    <TextInput
                       label="Nr kierunkowy"
-                      style={{ textAlign: "center", zIndex: 0 }}
-                      onChangeText={(value: string) =>
-                        setFieldValue("directionalNumber", value)
+                      style={{
+                        textAlign: "center",
+                        zIndex: 0,
+                        backgroundColor:
+                          theme.appTheme === "light"
+                            ? theme.themeLightColor
+                            : theme.themeDarkColor,
+                      }}
+                      textColor={
+                        theme.appTheme === "light"
+                          ? theme.themeDarkColor
+                          : theme.themeLightColor
                       }
-                      onBlur={() => handleBlur("directionalNumber")}
-                      value={values.directionalNumber}
-                      activeOutlineColor="#2196F3"
+                      onChangeText={handleChange("directionalNumber")}
+                      onBlur={handleBlur("directionalNumber")}
+                      value={
+                        values.directionalNumber
+                          ? String(values.directionalNumber)
+                          : ""
+                      }
+                      activeOutlineColor={theme.appMainColor}
                       mode="outlined"
                       keyboardType="numeric"
                       maxLength={3}
@@ -204,17 +237,27 @@ const RegisterView = () => {
                       )}
                   </View>
                   <View style={{ flex: 2.5 }}>
-                    <Field
-                      as={TextInput}
-                      style={{ textAlign: "center", zIndex: 0 }}
-                      name="phoneNumber"
-                      label="Numer telefonu"
-                      onChangeText={(value: string) =>
-                        setFieldValue("phoneNumber", value)
+                    <TextInput
+                      style={{
+                        textAlign: "center",
+                        zIndex: 0,
+                        backgroundColor:
+                          theme.appTheme === "light"
+                            ? theme.themeLightColor
+                            : theme.themeDarkColor,
+                      }}
+                      textColor={
+                        theme.appTheme === "light"
+                          ? theme.themeDarkColor
+                          : theme.themeLightColor
                       }
+                      label="Numer telefonu"
+                      onChangeText={handleChange("phoneNumber")}
                       onBlur={handleBlur("phoneNumber")}
-                      value={values.phoneNumber?.toString()}
-                      activeOutlineColor="#2196F3"
+                      value={
+                        values.phoneNumber ? String(values.phoneNumber) : ""
+                      }
+                      activeOutlineColor={theme.appMainColor}
                       mode="outlined"
                       keyboardType="numeric"
                       maxLength={9}
@@ -225,18 +268,26 @@ const RegisterView = () => {
                   </View>
                 </View>
                 <View>
-                  <Field
-                    as={TextInput}
-                    name="password"
+                  <TextInput
                     label="Hasło"
-                    style={{ textAlign: "center", zIndex: 0 }}
-                    onChangeText={(value: string) =>
-                      setFieldValue("password", value)
+                    style={{
+                      textAlign: "center",
+                      zIndex: 0,
+                      backgroundColor:
+                        theme.appTheme === "light"
+                          ? theme.themeLightColor
+                          : theme.themeDarkColor,
+                    }}
+                    textColor={
+                      theme.appTheme === "light"
+                        ? theme.themeDarkColor
+                        : theme.themeLightColor
                     }
-                    onBlur={() => handleBlur("password")}
-                    value={values.password}
+                    onChangeText={handleChange("password")}
+                    onBlur={handleBlur("password")}
+                    value={values.password ? String(values.password) : ""}
                     secureTextEntry={true}
-                    activeOutlineColor="#2196F3"
+                    activeOutlineColor={theme.appMainColor}
                     mode="outlined"
                   />
                   {touched.password && !!errors.password && (
@@ -244,18 +295,30 @@ const RegisterView = () => {
                   )}
                 </View>
                 <View>
-                  <Field
-                    as={TextInput}
-                    name="confirmPassword"
+                  <TextInput
                     label="Potwierdź hasło"
-                    style={{ textAlign: "center", zIndex: 0 }}
-                    onChangeText={(value: string) =>
-                      setFieldValue("confirmPassword", value)
+                    style={{
+                      textAlign: "center",
+                      zIndex: 0,
+                      backgroundColor:
+                        theme.appTheme === "light"
+                          ? theme.themeLightColor
+                          : theme.themeDarkColor,
+                    }}
+                    textColor={
+                      theme.appTheme === "light"
+                        ? theme.themeDarkColor
+                        : theme.themeLightColor
                     }
-                    onBlur={() => handleBlur("confirmPassword")}
-                    value={values.confirmPassword}
+                    onChangeText={handleChange("confirmPassword")}
+                    onBlur={handleBlur("confirmPassword")}
+                    value={
+                      values.confirmPassword
+                        ? String(values.confirmPassword)
+                        : ""
+                    }
                     secureTextEntry={true}
-                    activeOutlineColor="#2196F3"
+                    activeOutlineColor={theme.appMainColor}
                     mode="outlined"
                   />
                   {touched.confirmPassword && !!errors.confirmPassword && (
@@ -275,7 +338,7 @@ const RegisterView = () => {
                     mode="contained"
                     onPress={submitForm}
                     style={{
-                      backgroundColor: "#2196F3",
+                      backgroundColor: theme.appMainColor,
                       width: "40%",
                       borderRadius: 5,
                     }}

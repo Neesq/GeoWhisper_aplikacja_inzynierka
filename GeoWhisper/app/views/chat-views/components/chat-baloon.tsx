@@ -1,3 +1,4 @@
+import { useTheme } from "app/utils/theme-provider";
 import { FC } from "react";
 import { View, StyleSheet } from "react-native";
 import { Chip, Icon, Text } from "react-native-paper";
@@ -7,18 +8,31 @@ interface ChatBaloonProps {
   from: boolean;
 }
 export const ChatBaloon: FC<ChatBaloonProps> = ({ message, from }) => {
+  const theme = useTheme();
   return (
     <View>
       {/* <Text>{new Date().toISOString()}</Text> */}
       <View
         style={[
           styles.messageContainer,
-          !from ? styles.sentMessage : styles.receivedMessage,
+          !from
+            ? { ...styles.sentMessage, backgroundColor: theme.appMainColor }
+            : { ...styles.receivedMessage },
           !from ? styles.messageMarginRight : styles.messageMarginLeft,
         ]}
       >
         <Text
-          style={from ? styles.messageTextReceived : styles.messageTextSent}
+          style={
+            from
+              ? {
+                  ...styles.messageTextReceived,
+                  color:
+                    theme.appTheme === "light"
+                      ? theme.themeDarkColor
+                      : theme.themeLightColor,
+                }
+              : styles.messageTextSent
+          }
         >
           {message}
         </Text>
@@ -39,18 +53,16 @@ const styles = StyleSheet.create({
   },
   sentMessage: {
     alignSelf: "flex-end",
-    backgroundColor: "#2196F3",
   },
   receivedMessage: {
     alignSelf: "flex-start",
-    backgroundColor: "#FFFFFF",
   },
   messageTextReceived: {
     fontSize: 16,
   },
   messageTextSent: {
     fontSize: 16,
-    color: "white",
+    color: "black",
   },
 
   messageMarginLeft: {

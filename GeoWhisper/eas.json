@@ -2,21 +2,9 @@
   "build": {
     "preview": {
       "android": {
-        "compileSdkVersion": 34,
-        "targetSdkVersion": 34,
-        "buildToolsVersion": "34.0.0",
         "buildType": "apk",
         "distribution": "internal"
       }
-    },
-    "preview2": {
-      "android": {
-        "gradleCommand": ":app:assembleRelease"
-      }
-    },
-    "preview3": {
-      "developmentClient": true
-    },
-    "production": {}
+    }
   }
 }

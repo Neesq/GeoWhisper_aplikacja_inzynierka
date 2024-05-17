@@ -23,6 +23,7 @@ var __importDefault = (this && this.__importDefault) || function (mod) {
     return (mod && mod.__esModule) ? mod : { "default": mod };
 };
 Object.defineProperty(exports, "__esModule", { value: true });
+exports.app = void 0;
 const express_1 = __importDefault(require("express"));
 const dotenv_1 = __importDefault(require("dotenv"));
 const client_1 = require("@prisma/client");
@@ -39,26 +40,26 @@ const vonage = new Vonage({
 });
 // Initialize Twilio client
 dotenv_1.default.config();
-const app = (0, express_1.default)();
-app.use(body_parser_1.default.json());
-app.use(body_parser_1.default.urlencoded({ extended: true }));
-app.use((0, cors_1.default)());
+exports.app = (0, express_1.default)();
+exports.app.use(body_parser_1.default.json());
+exports.app.use(body_parser_1.default.urlencoded({ extended: true }));
+exports.app.use((0, cors_1.default)());
 const port = process.env.PORT || 3000;
 const prisma = new client_1.PrismaClient();
-const server = (0, http_1.createServer)(app);
+const server = (0, http_1.createServer)(exports.app);
 const io = new socket_io_1.Server(server, {
     cors: {
         origin: "*",
     },
 });
-app.get("/", (req, res) => {
+exports.app.get("/", (req, res) => {
     res.send("Express + TypeScript Server");
 });
 const verifyPassword = (password, hashedPassword) => {
     const hashedPasswordGivenPassword = js_base64_1.Base64.encode(password);
     return hashedPasswordGivenPassword === hashedPassword;
 };
-app.post("/login", (req, res) => __awaiter(void 0, void 0, void 0, function* () {
+exports.app.post("/login", (req, res) => __awaiter(void 0, void 0, void 0, function* () {
     try {
         const { user } = req.body;
         const isUserLoggedIn = yield prisma.user.findFirst({
@@ -148,7 +149,7 @@ app.post("/login", (req, res) => __awaiter(void 0, void 0, void 0, function* () 
         throw error;
     }
 }));
-app.post("/send-code", (req, res) => __awaiter(void 0, void 0, void 0, function* () {
+exports.app.post("/send-code", (req, res) => __awaiter(void 0, void 0, void 0, function* () {
     try {
         const { phoneNumber, directionalNumber, action } = req.body;
         const checkIfPhoneNumberIsRegistered = yield prisma.user.findFirst({
@@ -181,22 +182,22 @@ app.post("/send-code", (req, res) => __awaiter(void 0, void 0, void 0, function*
         throw error;
     }
 }));
-app.post("/register", (req, res) => __awaiter(void 0, void 0, void 0, function* () {
+exports.app.post("/register", (req, res) => __awaiter(void 0, void 0, void 0, function* () {
     try {
         const { user } = req.body;
         const userId = (0, uuid_1.v4)();
         if (!user.phoneNumber) {
-            throw Error("Brak numeru telefonu");
+            throw new Error("Brak numeru telefonu");
         }
         if (!user.directionalNumber) {
-            throw Error("Brak numeru kierunkowego");
+            throw new Error("Brak numeru kierunkowego");
         }
         if (!user.password) {
-            throw Error("Brak hasła");
+            throw new Error("Brak hasła");
         }
         const userExists = yield prisma.user.findFirst({
             where: {
-                phoneNumber: Number(user.password),
+                phoneNumber: Number(user.phoneNumber),
                 directionalNumber: Number(user.directionalNumber),
             },
         });
@@ -232,7 +233,7 @@ app.post("/register", (req, res) => __awaiter(void 0, void 0, void 0, function* 
         throw error;
     }
 }));
-app.post("/change-user-name", (req, res) => __awaiter(void 0, void 0, void 0, function* () {
+exports.app.post("/change-user-name", (req, res) => __awaiter(void 0, void 0, void 0, function* () {
     try {
         const { userName, userId } = req.body;
         if (!userId)
@@ -259,7 +260,7 @@ app.post("/change-user-name", (req, res) => __awaiter(void 0, void 0, void 0, fu
         throw error;
     }
 }));
-app.get("/get-user-name/:userId", (req, res) => __awaiter(void 0, void 0, void 0, function* () {
+exports.app.get("/get-user-name/:userId", (req, res) => __awaiter(void 0, void 0, void 0, function* () {
     try {
         const { userId } = req.params;
         if (!userId)
@@ -281,7 +282,7 @@ app.get("/get-user-name/:userId", (req, res) => __awaiter(void 0, void 0, void 0
         throw error;
     }
 }));
-app.get("/logout/:userId", (req, res) => __awaiter(void 0, void 0, void 0, function* () {
+exports.app.get("/logout/:userId", (req, res) => __awaiter(void 0, void 0, void 0, function* () {
     try {
         const { userId } = req.params;
         if (!userId)
@@ -302,7 +303,7 @@ app.get("/logout/:userId", (req, res) => __awaiter(void 0, void 0, void 0, funct
         throw error;
     }
 }));
-app.post("/update-location", (req, res) => __awaiter(void 0, void 0, void 0, function* () {
+exports.app.post("/update-location", (req, res) => __awaiter(void 0, void 0, void 0, function* () {
     try {
         const { latitude, longitude, userId } = req.body;
         if (!userId)
@@ -321,7 +322,7 @@ app.post("/update-location", (req, res) => __awaiter(void 0, void 0, void 0, fun
         throw error;
     }
 }));
-app.post("/get-user-id", (req, res) => __awaiter(void 0, void 0, void 0, function* () {
+exports.app.post("/get-user-id", (req, res) => __awaiter(void 0, void 0, void 0, function* () {
     try {
         const { directionalNumber, phoneNumber } = req.body;
         if (!directionalNumber || !phoneNumber)
@@ -344,7 +345,7 @@ app.post("/get-user-id", (req, res) => __awaiter(void 0, void 0, void 0, functio
         throw error;
     }
 }));
-app.post("/get-users-to-chat", (req, res) => __awaiter(void 0, void 0, void 0, function* () {
+exports.app.post("/get-users-to-chat", (req, res) => __awaiter(void 0, void 0, void 0, function* () {
     var _a, _b, _c, _d, _e;
     try {
         const { userId, oneChat } = req.body;
@@ -471,7 +472,7 @@ app.post("/get-users-to-chat", (req, res) => __awaiter(void 0, void 0, void 0, f
         throw error;
     }
 }));
-app.post("/user-availabilty-status", (req, res) => __awaiter(void 0, void 0, void 0, function* () {
+exports.app.post("/user-availabilty-status", (req, res) => __awaiter(void 0, void 0, void 0, function* () {
     try {
         const { userId, available } = req.body;
         if (!userId)
@@ -487,23 +488,7 @@ app.post("/user-availabilty-status", (req, res) => __awaiter(void 0, void 0, voi
         throw error;
     }
 }));
-app.post("/user-availabilty-status", (req, res) => __awaiter(void 0, void 0, void 0, function* () {
-    try {
-        const { userId, available } = req.body;
-        if (!userId)
-            throw Error("Brak id użytkownika");
-        yield prisma.user.update({
-            where: { id: userId },
-            data: { isAvailable: available },
-        });
-        res.status(200).json();
-    }
-    catch (error) {
-        console.error("Error updating user availablity:", error);
-        throw error;
-    }
-}));
-app.post("/user-settings-save", (req, res) => __awaiter(void 0, void 0, void 0, function* () {
+exports.app.post("/user-settings-save", (req, res) => __awaiter(void 0, void 0, void 0, function* () {
     try {
         const _f = req.body, { userId } = _f, restData = __rest(_f, ["userId"]);
         if (!userId)
@@ -521,7 +506,7 @@ app.post("/user-settings-save", (req, res) => __awaiter(void 0, void 0, void 0, 
         throw error;
     }
 }));
-app.post("/user-settings-fetch", (req, res) => __awaiter(void 0, void 0, void 0, function* () {
+exports.app.post("/user-settings-fetch", (req, res) => __awaiter(void 0, void 0, void 0, function* () {
     try {
         const { userId } = req.body;
         if (!userId)
@@ -545,7 +530,7 @@ app.post("/user-settings-fetch", (req, res) => __awaiter(void 0, void 0, void 0,
         throw error;
     }
 }));
-app.post("/report-user", (req, res) => __awaiter(void 0, void 0, void 0, function* () {
+exports.app.post("/report-user", (req, res) => __awaiter(void 0, void 0, void 0, function* () {
     try {
         const { userId, blockUser, reportMessage, reportedUserId } = req.body;
         if (!userId)
@@ -584,7 +569,7 @@ app.post("/report-user", (req, res) => __awaiter(void 0, void 0, void 0, functio
         throw error;
     }
 }));
-app.post("/fetch-blocked-users", (req, res) => __awaiter(void 0, void 0, void 0, function* () {
+exports.app.post("/fetch-blocked-users", (req, res) => __awaiter(void 0, void 0, void 0, function* () {
     try {
         const { userId } = req.body;
         if (!userId)
@@ -616,7 +601,7 @@ app.post("/fetch-blocked-users", (req, res) => __awaiter(void 0, void 0, void 0,
         throw error;
     }
 }));
-app.post("/unblock-user", (req, res) => __awaiter(void 0, void 0, void 0, function* () {
+exports.app.post("/unblock-user", (req, res) => __awaiter(void 0, void 0, void 0, function* () {
     try {
         const { userId, blockedUser } = req.body;
         if (!userId)
@@ -642,7 +627,7 @@ app.post("/unblock-user", (req, res) => __awaiter(void 0, void 0, void 0, functi
         throw error;
     }
 }));
-app.post("/forgot-password", (req, res) => __awaiter(void 0, void 0, void 0, function* () {
+exports.app.post("/forgot-password", (req, res) => __awaiter(void 0, void 0, void 0, function* () {
     try {
         const { userId, directionalNumber, password, phoneNumber } = req.body;
         if (userId) {
@@ -797,7 +782,7 @@ io.on("connection", (socket) => __awaiter(void 0, void 0, void 0, function* () {
                 },
             });
             if (!userLocation)
-                throw new Error("Error fetching user location.");
+                throw new Error("Błąd pobierania lokalizacji użytkownika");
             const rangeInDegrees = ((_g = userLocation.settings) === null || _g === void 0 ? void 0 : _g.searchRadius) / 111000;
             const stillInRange = yield prisma.user.findUnique({
                 where: {
@@ -815,13 +800,12 @@ io.on("connection", (socket) => __awaiter(void 0, void 0, void 0, function* () {
             io.to(socket.id).emit("userInRange", !!stillInRange);
         }
         catch (error) {
-            console.error("Error checking user range:", error);
-            io.to(socket.id).emit("error", "An error occurred while checking user range.");
+            io.to(socket.id).emit("error", "Nieoczekiwany błąd serwera podczas sprawdzania odległości.");
         }
     }));
     socket.on("cancelInvite", (invitedUser) => {
         const socketOfInvitedUser = userIdToSocketId[invitedUser];
-        socket.to(socketOfInvitedUser).emit("invitationCanceled");
+        socket.to(socketOfInvitedUser).emit("invitationCancelled");
     });
     socket.on("endChat", (to) => {
         io.to(userIdToSocketId[to]).emit("chatEnded", true);

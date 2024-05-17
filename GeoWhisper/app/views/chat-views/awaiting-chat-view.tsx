@@ -4,7 +4,7 @@ import { Chip } from "app/components/ui/chip";
 import { axiosInstance } from "app/utils/axios-instance";
 import { socket } from "app/utils/socket";
 import { useTheme } from "app/utils/theme-provider";
-import axios from "axios";
+import { handleUserAvailable } from "app/utils/toggle-user-available";
 import { router, useLocalSearchParams, useNavigation } from "expo-router";
 import { useEffect, useState } from "react";
 import { Pressable, View } from "react-native";
@@ -18,35 +18,23 @@ const AwaitingChatView = () => {
   const { invitedUser } = params;
   const [invitedUserName, setInvitedUserName] = useState<string>("");
   useEffect(() => {
-    socket.on("inviteDecision", (inviteDecision: boolean) => {
+    socket.on("inviteDecision", async (inviteDecision: boolean) => {
       if (inviteDecision) {
         router.push({
           pathname: "views/chat-views/chat-view",
           params: { invitedUser },
         });
       } else {
-        router.replace("views/main-view");
+        const userId = await AsyncStorage.getItem("userId");
+        if (userId) {
+          await handleUserAvailable(userId, true);
+          router.replace("views/main-view");
+        }
       }
     });
     return () => {
       socket.off("inviteDecision");
     };
-  }, []);
-
-  const handleUserAvailable = async () => {
-    const userId = await AsyncStorage.getItem("userId");
-    try {
-      await axiosInstance.post("/user-availabilty-status", {
-        userId: userId,
-        available: false,
-      });
-    } catch (error) {
-      Toast.show({ type: "error", text1: "Błąd zmiany statusu użytkownika" });
-    }
-  };
-
-  useEffect(() => {
-    handleUserAvailable();
   }, []);
 
   const getInvitedUserName = async () => {
@@ -60,7 +48,12 @@ const AwaitingChatView = () => {
           text1: "Nie znaleziono nazwy zaproszonego użytkownika.",
         });
       }
-    } catch (error) {}
+    } catch (error) {
+      Toast.show({
+        type: "error",
+        text1: "Błąd podczas pobierania nazwy zaproszonego użytkownika.",
+      });
+    }
   };
 
   useEffect(() => {
@@ -74,7 +67,16 @@ const AwaitingChatView = () => {
       },
       headerTitle: () => <AppHeaderTitle />,
       headerLeft: () => (
-        <Pressable onPress={() => router.back()}>
+        <Pressable
+          onPress={async () => {
+            const userId = await AsyncStorage.getItem("userId");
+            socket.emit("cancelInvite", invitedUser);
+            if (userId) {
+              await handleUserAvailable(userId, true);
+              router.back();
+            }
+          }}
+        >
           <Icon color="white" source="arrow-left" size={25} />
         </Pressable>
       ),

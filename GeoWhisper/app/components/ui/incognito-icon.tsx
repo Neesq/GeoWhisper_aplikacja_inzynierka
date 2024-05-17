@@ -1,7 +1,7 @@
-import { useTheme } from "app/utils/theme-provider";
+import { useTheme } from "../../utils/theme-provider";
 import { FC } from "react";
-import { View, StyleSheet, Pressable } from "react-native";
-import { Icon, Text } from "react-native-paper";
+import { Pressable, View } from "react-native";
+import { Icon } from "react-native-paper";
 
 interface IncognitoIconProps {
   handleClick: () => void;

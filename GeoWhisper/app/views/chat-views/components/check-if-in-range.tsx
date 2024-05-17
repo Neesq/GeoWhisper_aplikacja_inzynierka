@@ -1,4 +1,5 @@
 import { socket } from "app/utils/socket";
+import { handleUserAvailable } from "app/utils/toggle-user-available";
 import { router } from "expo-router";
 import { FC, useEffect, useState } from "react";
 import Toast from "react-native-toast-message";
@@ -43,13 +44,14 @@ export const CheckIfInRange: FC<CheckIfInRangeProps> = ({
         });
         toasterShowed = true;
       }
-      disconnectTimerId = setTimeout(() => {
+      disconnectTimerId = setTimeout(async () => {
         if (disconnectTimerId) {
           socket.off("userInRange");
           socket.off("rangeCheck");
-          router.replace("views/main-view");
+          await handleUserAvailable(userIds.from, true);
           clearInterval(rangeCheckIntervalId!);
           clearTimeout(disconnectTimerId!);
+          router.replace("views/main-view");
         }
       }, 30000);
     } else {

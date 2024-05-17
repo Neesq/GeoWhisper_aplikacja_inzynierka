@@ -3,12 +3,12 @@ import dotenv from "dotenv";
 import { PrismaClient } from "@prisma/client";
 import { Query } from "express-serve-static-core";
 import bodyParser from "body-parser";
-import bcrypt from "react-native-bcrypt";
 import { v4 as uuidv4 } from "uuid";
 const { Vonage } = require("@vonage/server-sdk");
 import { Server, Socket } from "socket.io";
 import cors from "cors";
 import { createServer } from "http";
+import { Base64 } from "js-base64";
 const vonage = new Vonage({
   apiKey: process.env.VONAGE_API_KEY,
   apiSecret: process.env.VONAGE_API_SECRET,
@@ -17,7 +17,7 @@ const vonage = new Vonage({
 
 dotenv.config();
 
-const app: Express = express();
+export const app: Express = express();
 app.use(bodyParser.json());
 app.use(bodyParser.urlencoded({ extended: true }));
 app.use(cors());
@@ -55,6 +55,11 @@ interface LoginRequest {
 }
 type LoginResponse = { userId: string } | { message: string };
 
+const verifyPassword = (password: string, hashedPassword: string): boolean => {
+  const hashedPasswordGivenPassword = Base64.encode(password);
+  return hashedPasswordGivenPassword === hashedPassword;
+};
+
 app.post(
   "/login",
   async (
@@ -64,24 +69,30 @@ app.post(
     try {
       const { user } = req.body;
 
-      if (!user.id) {
-        const isUserLoggedIn = await prisma.user.findFirst({
-          where: {
-            directionalNumber: Number(user.directionalNumber),
-            phoneNumber: Number(user.phoneNumber),
-          },
-          select: {
-            isOnline: true,
-          },
-        });
+      const isUserLoggedIn = await prisma.user.findFirst({
+        where: !user.id
+          ? {
+              directionalNumber: Number(user.directionalNumber),
+              phoneNumber: Number(user.phoneNumber),
+            }
+          : {
+              id: user.id,
+              directionalNumber: Number(user.directionalNumber),
+              phoneNumber: Number(user.phoneNumber),
+            },
+        select: {
+          isOnline: true,
+        },
+      });
 
-        if (isUserLoggedIn?.isOnline) {
-          return res
-            .status(200)
-            .json({ message: "Ten użytkownik jest już zalogowany." });
-        }
-        console.log(isUserLoggedIn);
-        const usersData = await prisma.user.findMany({
+      if (isUserLoggedIn?.isOnline) {
+        return res
+          .status(200)
+          .json({ message: "Ten użytkownik jest już zalogowany." });
+      }
+
+      if (!user.id) {
+        const usersData = await prisma.user.findFirstOrThrow({
           where: {
             directionalNumber: Number(user.directionalNumber),
             phoneNumber: Number(user.phoneNumber),
@@ -91,42 +102,24 @@ app.post(
             password: true,
           },
         });
-        if (usersData.length !== 0) {
-          for (const userData of usersData) {
-            const passwordEqual = bcrypt.compareSync(
-              user.password,
-              userData.password
-            );
-            if (passwordEqual) {
-              res.status(200).json({ userId: userData.id });
-            } else {
-              res.status(200).json({ message: "Niepoprawne dane logowania." });
-            }
-          }
+
+        const passwordEqual = user.password === usersData.password;
+        if (passwordEqual) {
+          await prisma.user.update({
+            where: {
+              id: usersData.id,
+            },
+            data: {
+              isOnline: true,
+            },
+          });
+
+          res.status(200).json({ userId: usersData.id });
         } else {
-          res.status(200).json({ message: "Nie znaleziono użytkownika." });
+          res.status(200).json({ message: "Niepoprawne dane logowania." });
         }
         return;
       } else {
-        const isUserLoggedIn = await prisma.user.findFirst({
-          where: {
-            id: user.id,
-            phoneNumber: Number(user.phoneNumber),
-            directionalNumber: Number(user.directionalNumber),
-          },
-          select: {
-            isOnline: true,
-          },
-        });
-
-        console.log(isUserLoggedIn);
-
-        if (isUserLoggedIn?.isOnline) {
-          return res
-            .status(200)
-            .json({ message: "Ten użytkownik jest już zalogowany." });
-        }
-
         const userData = await prisma.user.findUnique({
           where: {
             id: user.id,
@@ -135,19 +128,27 @@ app.post(
           },
         });
         if (userData) {
-          const passwordEqual = bcrypt.compareSync(
-            user.password,
-            userData.password
-          );
+          const passwordEqual = user.password === userData.password;
           if (passwordEqual) {
-            res.status(200).json({ userId: userData.id });
+            await prisma.user.update({
+              where: {
+                id: userData.id,
+              },
+              data: {
+                isOnline: true,
+              },
+            });
+            return res.status(200).json({ userId: userData.id });
           } else {
-            res.status(200).json({ message: "Niepoprawne dane logowania." });
+            return res
+              .status(200)
+              .json({ message: "Niepoprawne dane logowania." });
           }
         } else {
-          res.status(200).json({ message: "Nie znaleziono użytkownika." });
+          return res
+            .status(200)
+            .json({ message: "Nie znaleziono użytkownika." });
         }
-        return;
       }
     } catch (error) {
       console.error("Login error:", error);
@@ -169,16 +170,36 @@ type RegisterResponse = { userId: string } | { message: string };
 interface SendCodeRequest {
   phoneNumber: string;
   directionalNumber: string;
+  action: "register" | "forgotPassword";
 }
 
 app.post(
   "/send-code",
   async (
     req: CustomRequest<SendCodeRequest, any>,
-    res: Response<{ code: number }>
+    res: Response<{ code: number } | { message: string }>
   ) => {
     try {
-      const { phoneNumber, directionalNumber } = req.body;
+      const { phoneNumber, directionalNumber, action } = req.body;
+
+      const checkIfPhoneNumberIsRegistered = await prisma.user.findFirst({
+        where: {
+          phoneNumber: Number(phoneNumber),
+          directionalNumber: Number(directionalNumber),
+        },
+      });
+      if (checkIfPhoneNumberIsRegistered && action === "register") {
+        return res.status(200).json({
+          message: "Taki numer telefonu jest już zarejestrowany",
+        });
+      } else if (
+        !checkIfPhoneNumberIsRegistered &&
+        action === "forgotPassword"
+      ) {
+        return res.status(200).json({
+          message: "Taki numer telefonu nie jest zarejestrowany",
+        });
+      }
       const code = Math.floor(Math.random() * (999999 - 100000 + 1)) + 100000;
       const response = await vonage.sms.send({
         to: `${directionalNumber.trim()}${phoneNumber.trim()}`,
@@ -205,18 +226,18 @@ app.post(
 
       const userId = uuidv4();
       if (!user.phoneNumber) {
-        throw Error("Brak numeru telefonu");
+        throw new Error("Brak numeru telefonu");
       }
       if (!user.directionalNumber) {
-        throw Error("Brak numeru kierunkowego");
+        throw new Error("Brak numeru kierunkowego");
       }
       if (!user.password) {
-        throw Error("Brak hasła");
+        throw new Error("Brak hasła");
       }
 
       const userExists = await prisma.user.findFirst({
         where: {
-          phoneNumber: Number(user.password),
+          phoneNumber: Number(user.phoneNumber),
           directionalNumber: Number(user.directionalNumber),
         },
       });
@@ -274,8 +295,7 @@ app.post(
       });
       if (!checkUser)
         res.status(200).json({ message: "Nie znaleziono użytkownika." });
-
-      const changedUser = prisma.user.update({
+      const changedUser = await prisma.user.update({
         where: {
           id: userId,
         },
@@ -283,7 +303,6 @@ app.post(
           name: userName,
         },
       });
-
       res.status(200).send();
     } catch (error) {
       console.error("Error changing user name:", error);
@@ -300,7 +319,6 @@ app.get(
   ) => {
     try {
       const { userId } = req.params;
-      console.log(userId);
       if (!userId)
         return res.status(200).json({ message: "Brak id użytkownika." });
       const getUserName = await prisma.user.findUnique({
@@ -330,7 +348,6 @@ app.get(
     try {
       const { userId } = req.params;
 
-      console.log(userId);
       if (!userId)
         return res.status(200).json({ message: "Brak id użytkownika." });
       await prisma.user.update({
@@ -339,6 +356,7 @@ app.get(
         },
         data: {
           isOnline: false,
+          isAvailable: false,
         },
       });
 
@@ -441,10 +459,41 @@ app.post(
             select: {
               searchRadius: true,
               numberOfChats: true,
+              languagePrefference: true,
             },
           },
         },
       });
+
+      const usersToAvoid: string[] = [userId];
+
+      const blockedByUsers = await prisma.blockedUsers.findMany({
+        where: {
+          blockedUserId: userId,
+        },
+        select: {
+          userId: true,
+        },
+      });
+      const blockedUsers = await prisma.blockedUsers.findMany({
+        where: {
+          userId,
+        },
+        select: {
+          blockedUserId: true,
+        },
+      });
+
+      if (blockedByUsers) {
+        for (const blockedByUser of blockedByUsers) {
+          usersToAvoid.push(blockedByUser.userId);
+        }
+      }
+      if (blockedUsers) {
+        for (const blockedUser of blockedUsers) {
+          usersToAvoid.push(blockedUser.blockedUserId);
+        }
+      }
 
       if (!userLocation)
         throw Error("Błąd pobierania lokalizacji użytkownika.");
@@ -461,10 +510,14 @@ app.post(
           },
           AND: {
             NOT: {
-              id: userId,
+              id: { in: usersToAvoid },
             },
             isAvailable: true,
             isOnline: true,
+            settings: {
+              searchRadius: userLocation.settings?.searchRadius,
+              languagePrefference: userLocation.settings?.languagePrefference,
+            },
           },
         },
         select: {
@@ -604,20 +657,205 @@ app.post(
   }
 );
 
-// app.listen(port, () => {
-//   console.log(`[server]: Server is running at http://localhost:${port}`);
-// });
+interface ReportUserRequest {
+  userId: string;
+  reportedUserId: string;
+  reportMessage: string;
+  blockUser: boolean;
+}
+
+app.post(
+  "/report-user",
+  async (
+    req: CustomRequest<ReportUserRequest, any>,
+    res: Response<{ message: string }>
+  ) => {
+    try {
+      const { userId, blockUser, reportMessage, reportedUserId } = req.body;
+      if (!userId) throw Error("Brak id użytkownika");
+      if (!reportedUserId) throw Error("Brak id reportowanego użytkownika");
+
+      const reportResponse = await prisma.reports.create({
+        data: {
+          reportingUserId: userId,
+          reportedUserId,
+          reportMessage,
+          reportTime: new Date(),
+          resolved: false,
+        },
+      });
+
+      if (!reportResponse) throw Error("Błąd podczas zgłaszania użytkownika");
+
+      if (blockUser) {
+        const blockUserResponse = await prisma.blockedUsers.create({
+          data: {
+            blockedUserId: reportedUserId,
+            userId: userId,
+          },
+        });
+        if (!blockUserResponse)
+          throw Error("Błąd bodczas blokowania użytkownika");
+      }
+
+      res.status(200).json({
+        message: blockUser
+          ? "Pomyślnie zgłoszono użytkownika i zablokowano użytkownika."
+          : "Pomyślnie zgłoszono użytkownika.",
+      });
+    } catch (error) {
+      console.error("Error reporting/blocking user:", error);
+      throw error;
+    }
+  }
+);
+
+interface FetchBlockedUsersRequest {
+  userId: string;
+}
+
+app.post(
+  "/fetch-blocked-users",
+  async (
+    req: CustomRequest<FetchBlockedUsersRequest, any>,
+    res: Response<{ id: string; name: string }[] | null>
+  ) => {
+    try {
+      const { userId } = req.body;
+      if (!userId) throw Error("Brak id użytkownika");
+
+      const blockedUserIds = await prisma.blockedUsers.findMany({
+        where: {
+          userId,
+        },
+        select: {
+          blockedUserId: true,
+        },
+      });
+
+      const mappedBlockedUserIds = blockedUserIds.map(
+        (blockedUser) => blockedUser.blockedUserId
+      );
+
+      const blockedUsers = await prisma.user.findMany({
+        where: {
+          id: {
+            in: mappedBlockedUserIds,
+          },
+        },
+        select: {
+          id: true,
+          name: true,
+        },
+      });
+
+      res.status(200).json(blockedUsers ?? null);
+    } catch (error) {
+      console.error("Error reporting/blocking user:", error);
+      throw error;
+    }
+  }
+);
+app.post(
+  "/unblock-user",
+  async (
+    req: CustomRequest<{ userId: string; blockedUser: string }, any>,
+    res: Response
+  ) => {
+    try {
+      const { userId, blockedUser } = req.body;
+      if (!userId) throw Error("Brak id użytkownika");
+
+      const blockedUserRowId = await prisma.blockedUsers.findFirst({
+        where: {
+          userId,
+          blockedUserId: blockedUser,
+        },
+        select: {
+          id: true,
+        },
+      });
+
+      await prisma.blockedUsers.delete({
+        where: {
+          id: blockedUserRowId?.id,
+        },
+      });
+
+      return res.status(200).send();
+    } catch (error) {
+      console.error("Error unblocking user:", error);
+      throw error;
+    }
+  }
+);
+
+app.post(
+  "/forgot-password",
+  async (
+    req: CustomRequest<
+      {
+        userId: string;
+        directionalNumber: number;
+        phoneNumber: number;
+        password: string;
+      },
+      any
+    >,
+    res: Response
+  ) => {
+    try {
+      const { userId, directionalNumber, password, phoneNumber } = req.body;
+      if (userId) {
+        await prisma.user.update({
+          where: {
+            id: userId,
+            phoneNumber: Number(phoneNumber),
+            directionalNumber: Number(directionalNumber),
+          },
+          data: {
+            password: password,
+          },
+        });
+      } else {
+        const userToUpdate = await prisma.user.findFirst({
+          where: {
+            phoneNumber: Number(phoneNumber),
+            directionalNumber: Number(directionalNumber),
+          },
+        });
+        if (!userToUpdate) throw Error("Nie znaleziono użytkownika.");
+        await prisma.user.update({
+          where: {
+            id: userToUpdate.id,
+          },
+          data: {
+            password: password,
+          },
+        });
+      }
+      res.status(200).send();
+    } catch (error) {
+      console.error("Error unblocking user:", error);
+      throw error;
+    }
+  }
+);
 
 const userIdToSocketId: Record<string, string> = {};
 
-const setUserOnlineState = async (userId: string, state: boolean) => {
+const setUserOnlineState = async (
+  userId: string,
+  state: boolean,
+  availabilty: boolean
+) => {
   await prisma.user.update({
     where: {
       id: userId,
     },
     data: {
       isOnline: state,
-      isAvailable: true,
+      isAvailable: availabilty,
     },
   });
 };
@@ -628,9 +866,8 @@ io.on("connection", async (socket: Socket) => {
   socket.on("mapUserId", async (userId: string) => {
     if (!userIdToSocketId[userId]) {
       console.log(`Mapping user ${userId} to socket ${socket.id}`);
-      await setUserOnlineState(userId, true);
+      await setUserOnlineState(userId, true, true);
       userIdToSocketId[userId] = socket.id;
-      console.log("usersMapped", userIdToSocketId);
     }
   });
 
@@ -638,13 +875,18 @@ io.on("connection", async (socket: Socket) => {
     "sendInvite",
     async (invitationData: { from: string; to: string }) => {
       const { from, to } = invitationData;
-
+      const userIdToCheck = to;
+      if (!userIdToCheck)
+        return socket.emit("userUnavailable", {
+          message: "Nie znaleziono takiego użytkownika.",
+        });
       const checkInvitedUser = await prisma.user.findUnique({
         where: {
-          id: userIdToSocketId[to],
+          id: to,
         },
         select: {
           isAvailable: true,
+          isOnline: true,
         },
       });
       if (!checkInvitedUser?.isAvailable) {
@@ -655,7 +897,7 @@ io.on("connection", async (socket: Socket) => {
         await prisma.user.updateMany({
           where: {
             id: {
-              in: [userIdToSocketId[to], userIdToSocketId[from]],
+              in: [to, from],
             },
           },
           data: {
@@ -671,28 +913,35 @@ io.on("connection", async (socket: Socket) => {
     "acceptDenyInvitation",
     async (data: { to: string; from: string; accepted: boolean }) => {
       const { accepted, to, from } = data;
-      io.to(userIdToSocketId[to]).emit("inviteDecision", accepted);
       if (!accepted) {
         await prisma.user.updateMany({
           where: {
             id: {
-              in: [userIdToSocketId[to], userIdToSocketId[from]],
+              in: [to, from],
             },
           },
           data: {
-            isAvailable: false,
+            isAvailable: true,
           },
         });
       }
+      io.to(userIdToSocketId[to]).emit("inviteDecision", accepted);
     }
   );
 
   socket.on(
     "message",
-    (messageData: { from: string; to: string; message: string }) => {
+    async (messageData: { from: string; to: string; message: string }) => {
       const { from, to, message } = messageData;
       const senderSocketId = userIdToSocketId[from];
       const recipientSocketId = userIdToSocketId[to];
+      await prisma.message.create({
+        data: {
+          senderId: from,
+          recipientId: to,
+          content: message,
+        },
+      });
       if (senderSocketId && recipientSocketId) {
         io.to(senderSocketId).emit("messageReceived", {
           from: from,
@@ -727,7 +976,8 @@ io.on("connection", async (socket: Socket) => {
             },
           },
         });
-        if (!userLocation) throw new Error("Error fetching user location.");
+        if (!userLocation)
+          throw new Error("Błąd pobierania lokalizacji użytkownika");
         const rangeInDegrees = userLocation.settings?.searchRadius! / 111000;
         const stillInRange = await prisma.user.findUnique({
           where: {
@@ -744,14 +994,18 @@ io.on("connection", async (socket: Socket) => {
         });
         io.to(socket.id).emit("userInRange", !!stillInRange);
       } catch (error) {
-        console.error("Error checking user range:", error);
         io.to(socket.id).emit(
           "error",
-          "An error occurred while checking user range."
+          "Nieoczekiwany błąd serwera podczas sprawdzania odległości."
         );
       }
     }
   );
+
+  socket.on("cancelInvite", (invitedUser: string) => {
+    const socketOfInvitedUser = userIdToSocketId[invitedUser];
+    socket.to(socketOfInvitedUser).emit("invitationCancelled");
+  });
 
   socket.on("endChat", (to: string) => {
     io.to(userIdToSocketId[to]).emit("chatEnded", true);
@@ -765,15 +1019,12 @@ io.on("connection", async (socket: Socket) => {
     );
     console.log("User disconnected: ", userId);
     if (userId) {
-      await setUserOnlineState(userId, false);
+      await setUserOnlineState(userId, false, false);
       console.log(`Deleting mapping for user ${userId}`);
       delete userIdToSocketId[userId];
     }
   });
 });
-
-// io.listen(Number(port));
-// app.listen(port);
 
 server.listen(port, () => {
   console.log(`[server]: Server is running at http://localhost:${port}`);

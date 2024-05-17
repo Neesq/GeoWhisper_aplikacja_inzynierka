@@ -3,9 +3,9 @@ import OtpVerificationDialogDialog from "app/components/dialog-components/otp-ve
 import { AppHeaderTitle } from "app/components/ui/app-header-title";
 import { axiosInstance } from "app/utils/axios-instance";
 import { generateUserName } from "app/utils/generate-user-name";
+import { hashPassword } from "app/utils/hash-password";
 import { KeepLoggedIn } from "app/utils/keep-logged-in-enum";
 import { useTheme } from "app/utils/theme-provider";
-import bcrypt from "bcryptjs";
 import { router, useNavigation } from "expo-router";
 import { Formik, FormikHelpers } from "formik";
 import { useEffect, useState } from "react";
@@ -65,7 +65,10 @@ const RegisterView = () => {
     });
   }, [navigation, theme]);
 
-  const handleRegister = async (code: string) => {
+  const handleRegister = async (
+    code: string,
+    setOtpCode: (code: string) => void
+  ) => {
     if (Number(sentCode) === Number(code)) {
       const response = await axiosInstance.post("/register", {
         user: {
@@ -83,7 +86,12 @@ const RegisterView = () => {
         });
         await AsyncStorage.setItem("userId", response.data.userId);
         router.replace("views/login-register-view/login-view");
+      } else if (response.data.message) {
+        Toast.show({ type: "error", text1: response.data.message });
       }
+    } else {
+      Toast.show({ type: "error", text1: "Błędny kod" });
+      setOtpCode("");
     }
   };
 
@@ -91,7 +99,7 @@ const RegisterView = () => {
     values: RegisterValues,
     formikHelpers: FormikHelpers<RegisterValues>
   ) => {
-    const encryptedPassword = bcrypt.hashSync(values.password, 6);
+    const encryptedPassword = hashPassword(values.password);
     try {
       setUserData({
         name: generateUserName(),
@@ -99,15 +107,17 @@ const RegisterView = () => {
         directionalNumber: values.directionalNumber,
         phoneNumber: values.phoneNumber,
       });
-      const response = await axiosInstance.post<{ code: string }>(
-        "/send-code",
-        {
-          phoneNumber: values.phoneNumber,
-          directionalNumber: values.directionalNumber,
-        }
-      );
-      setSentCode(response.data.code);
-      openOtpVerifictationDialog();
+      const response = await axiosInstance.post("/send-code", {
+        phoneNumber: values.phoneNumber,
+        directionalNumber: values.directionalNumber,
+        action: "register",
+      });
+      if (response.data.code) {
+        setSentCode(response.data.code);
+        openOtpVerifictationDialog();
+      } else if (response.data.message) {
+        Toast.show({ type: "error", text1: response.data.message });
+      }
       return;
     } catch (error) {
       console.error(error);

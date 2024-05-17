@@ -1,16 +1,14 @@
 import AsyncStorage from "@react-native-async-storage/async-storage";
-import { Redirect } from "expo-router";
 import * as Location from "expo-location";
+import { Redirect } from "expo-router";
 import { FC, useEffect, useState } from "react";
-import { ActivityIndicator } from "react-native-paper";
-import { axiosInstance } from "./utils/axios-instance";
-import { useTheme } from "./utils/theme-provider";
-import { View, Text } from "react-native";
+import { Linking, Text, View } from "react-native";
+import { ActivityIndicator, Button, Icon } from "react-native-paper";
 import Toast from "react-native-toast-message";
+import { AppHeaderTitle } from "./components/ui/app-header-title";
 import { KeepLoggedIn } from "./utils/keep-logged-in-enum";
 
 const HomePage: FC = () => {
-  const theme = useTheme();
   const [localizationPermissions, setLocalizationPermissions] = useState<
     "granted" | "notGranted" | "checking"
   >("checking");
@@ -61,15 +59,63 @@ const HomePage: FC = () => {
           alignItems: "center",
         }}
       >
-        <ActivityIndicator size="large" />
+        <ActivityIndicator testID="loading-indicator" size="large" />
       </View>
     );
   }
-  //TODO: Add view informing user to grant localization permissions for the app
   if (localizationPermissions === "notGranted")
     return (
-      <View>
-        <Text>Włącz lokalizację </Text>
+      <View
+        style={{
+          width: "100%",
+          height: "100%",
+          paddingTop: 50,
+          display: "flex",
+          alignItems: "center",
+          gap: 20,
+        }}
+      >
+        <AppHeaderTitle color="rgb(33, 150, 243)" />
+        <View style={{ width: "80%", marginTop: 200 }}>
+          <Text style={{ fontWeight: "bold", textAlign: "center" }}>
+            Muszą zostać nadane uprawnienia do lokalizacji dla aplikacji
+            GeoWhisper, w przeciwnym razie aplikacja nie będzie działać
+          </Text>
+        </View>
+        <View style={{ width: "80%", justifyContent: "center" }}>
+          <Text>
+            Nadaj uprawnienia do lokalizacji zaznaczając te dwie opcje:
+          </Text>
+          <View
+            style={{
+              display: "flex",
+              flexDirection: "row",
+              alignItems: "center",
+              gap: 10,
+            }}
+          >
+            <Icon source="checkbox-blank-circle" size={10} />
+            <Text>Zezwalaj zawszę</Text>
+          </View>
+          <View
+            style={{
+              display: "flex",
+              flexDirection: "row",
+              alignItems: "center",
+              gap: 10,
+            }}
+          >
+            <Icon source="checkbox-blank-circle" size={10} />
+            <Text>Użyj dokładnej lokalizacji</Text>
+          </View>
+        </View>
+        <Button
+          mode="contained"
+          buttonColor="rgb(33, 150, 243)"
+          onPress={() => Linking.openSettings()}
+        >
+          Przejdź do ustawień
+        </Button>
       </View>
     );
 

@@ -1,9 +1,7 @@
 import { useTheme } from "app/utils/theme-provider";
-import { Field, Formik } from "formik";
 import { FC } from "react";
-import { View, Text } from "react-native";
-import { Button, Card, Modal, TextInput } from "react-native-paper";
-import * as yup from "yup";
+import { Text, View } from "react-native";
+import { Button, Card, Modal } from "react-native-paper";
 
 interface ConfirmExitSettingsDialogProps {
   open: boolean;

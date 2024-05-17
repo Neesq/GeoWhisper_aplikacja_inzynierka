@@ -1,15 +1,17 @@
 import AsyncStorage from "@react-native-async-storage/async-storage";
 import { AppHeaderTitle } from "app/components/ui/app-header-title";
-import { router, useNavigation } from "expo-router";
-import { Field, Formik, FormikHelpers } from "formik";
-import { useEffect, useState } from "react";
-import { Pressable, View } from "react-native";
-import Toast from "react-native-toast-message";
 import { axiosInstance } from "app/utils/axios-instance";
 import { useTheme } from "app/utils/theme-provider";
+import { handleUserAvailable } from "app/utils/toggle-user-available";
+import { router, useNavigation } from "expo-router";
+import { Formik, FormikHelpers } from "formik";
+import { useEffect, useState } from "react";
+import { Pressable, View } from "react-native";
 import { Button, Text, TextInput } from "react-native-paper";
+import Toast from "react-native-toast-message";
 import * as yup from "yup";
 import ForgotPasswordDialog from "./components/forgot-password-dialog";
+import { hashPassword } from "app/utils/hash-password";
 
 interface LogInValues {
   directionalNumber: number | null;
@@ -24,11 +26,14 @@ const initialValues: LogInValues = {
 };
 
 const LoginView = () => {
+  //zmienna od której zależy wyświetlenie okna dialogowego do ustawienia nowego hasła
   const [forgotPasswordDialog, setForgotPasswordDialog] = useState(false);
+  //Pobranie wartości dotyczących motywu aplikacji i koloru
   const theme = useTheme();
-
+  //Pobranie obiektu nawigacji z biblioteki react native
   const navigation = useNavigation();
 
+  //React Hook - useEffect to funkcja w tym przypadku ustawiająca opcje wyświetlanego nagłówka w danym widoku. W tym przypadku ustawiamy kolor tła. przypisujemy komponent <AppHeaderTitle /> jako tytuł, centrujemy headerTitle, oraz ustawiamy, domyślną strzałkę z nawigacji expo na niewidoczną, drugim argumentem jest tablica zależności, dzięki której gdy zmienna wpisaną w tą tablicę zmieni się, funkcja w pierwszym argumęcie wykona się jeszcze raz.
   useEffect(() => {
     navigation.setOptions({
       headerStyle: {
@@ -40,6 +45,7 @@ const LoginView = () => {
     });
   }, [navigation, theme]);
 
+  //Funkcje wspomagające: Otwieranie i zamykanie okna dialogowego do ustawiania nowego hasła
   const openForgotPasswordModal = () => {
     setForgotPasswordDialog(true);
   };
@@ -47,36 +53,48 @@ const LoginView = () => {
     setForgotPasswordDialog(false);
   };
 
+  //Funkcja wykonywana po wicśnięciu przycisku zaloguj
   const handleSubmit = async (
     values: LogInValues,
     formikHelpers: FormikHelpers<LogInValues>
   ) => {
     try {
+      //Jeżeli nie ma hasła przerywamy funkcję
       if (!values.password) {
         return;
       }
+      //Zapytanie do serwera które zweaca id użytkownika
       const response = await axiosInstance.post("/get-user-id", {
         directionalNumber: values.directionalNumber,
         phoneNumber: values.phoneNumber,
       });
-
+      //Zakodowanie hasła użytkownika, żeby można było bezpiecznie je przesłać do serwera
+      const password = hashPassword(values.password);
+      //Zapisanie w lokalnym makazynie id użytkownika
       await AsyncStorage.setItem("userId", response.data.userId);
+      //Zapytanie do serwera, które weryfikuje wpisane dane oraz zwraca id użytkownika lub wiadomość z błędem
       const loginResponse = await axiosInstance.post("/login", {
         user: {
           id: response.data.userId,
           directionalNumber: values.directionalNumber,
           phoneNumber: values.phoneNumber,
-          password: values.password,
+          password: password,
         },
       });
+      //jeżeli została zwrócona wiadomość z błędem wyświetlamy ją w alercie
       if (loginResponse.data.message) {
         Toast.show({ type: "error", text1: loginResponse.data.message });
-      } else if (loginResponse.data.userId) {
-        await AsyncStorage.setItem("userId", loginResponse.data.userId);
+      }
+      //jeżeli zostało zwrócone id użytkownika wykonujemy następujące kroki:
+      //-resetujemy formularz
+      //-zmieniamy stan użytkownika na dostępny
+      //-przechodzimy na stronę główną
+      else if (loginResponse.data.userId) {
         formikHelpers.resetForm();
+        await handleUserAvailable(loginResponse.data.userId, true);
         router.replace("views/main-view");
       }
-      return;
+      //Jeżeli serwer zwróci error wyświetlamy alert
     } catch (eror) {
       Toast.show({ type: "error", text1: "Bąd podczas logowania." });
     }

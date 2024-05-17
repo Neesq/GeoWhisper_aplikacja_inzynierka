@@ -1,6 +1,6 @@
 import Slider from "@react-native-community/slider";
 import { useTheme } from "app/utils/theme-provider";
-import { View, Text } from "react-native";
+import { Text, View } from "react-native";
 
 interface TextSliderValueProps {
   settingName: string;

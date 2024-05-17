@@ -27,12 +27,12 @@ const express_1 = __importDefault(require("express"));
 const dotenv_1 = __importDefault(require("dotenv"));
 const client_1 = require("@prisma/client");
 const body_parser_1 = __importDefault(require("body-parser"));
-const react_native_bcrypt_1 = __importDefault(require("react-native-bcrypt"));
 const uuid_1 = require("uuid");
 const { Vonage } = require("@vonage/server-sdk");
 const socket_io_1 = require("socket.io");
 const cors_1 = __importDefault(require("cors"));
 const http_1 = require("http");
+const js_base64_1 = require("js-base64");
 const vonage = new Vonage({
     apiKey: process.env.VONAGE_API_KEY,
     apiSecret: process.env.VONAGE_API_SECRET,
@@ -54,26 +54,35 @@ const io = new socket_io_1.Server(server, {
 app.get("/", (req, res) => {
     res.send("Express + TypeScript Server");
 });
+const verifyPassword = (password, hashedPassword) => {
+    const hashedPasswordGivenPassword = js_base64_1.Base64.encode(password);
+    return hashedPasswordGivenPassword === hashedPassword;
+};
 app.post("/login", (req, res) => __awaiter(void 0, void 0, void 0, function* () {
     try {
         const { user } = req.body;
-        if (!user.id) {
-            const isUserLoggedIn = yield prisma.user.findFirst({
-                where: {
+        const isUserLoggedIn = yield prisma.user.findFirst({
+            where: !user.id
+                ? {
+                    directionalNumber: Number(user.directionalNumber),
+                    phoneNumber: Number(user.phoneNumber),
+                }
+                : {
+                    id: user.id,
                     directionalNumber: Number(user.directionalNumber),
                     phoneNumber: Number(user.phoneNumber),
                 },
-                select: {
-                    isOnline: true,
-                },
-            });
-            if (isUserLoggedIn === null || isUserLoggedIn === void 0 ? void 0 : isUserLoggedIn.isOnline) {
-                return res
-                    .status(200)
-                    .json({ message: "Ten użytkownik jest już zalogowany." });
-            }
-            console.log(isUserLoggedIn);
-            const usersData = yield prisma.user.findMany({
+            select: {
+                isOnline: true,
+            },
+        });
+        if (isUserLoggedIn === null || isUserLoggedIn === void 0 ? void 0 : isUserLoggedIn.isOnline) {
+            return res
+                .status(200)
+                .json({ message: "Ten użytkownik jest już zalogowany." });
+        }
+        if (!user.id) {
+            const usersData = yield prisma.user.findFirstOrThrow({
                 where: {
                     directionalNumber: Number(user.directionalNumber),
                     phoneNumber: Number(user.phoneNumber),
@@ -83,39 +92,24 @@ app.post("/login", (req, res) => __awaiter(void 0, void 0, void 0, function* () 
                     password: true,
                 },
             });
-            if (usersData.length !== 0) {
-                for (const userData of usersData) {
-                    const passwordEqual = react_native_bcrypt_1.default.compareSync(user.password, userData.password);
-                    if (passwordEqual) {
-                        res.status(200).json({ userId: userData.id });
-                    }
-                    else {
-                        res.status(200).json({ message: "Niepoprawne dane logowania." });
-                    }
-                }
+            const passwordEqual = user.password === usersData.password;
+            if (passwordEqual) {
+                yield prisma.user.update({
+                    where: {
+                        id: usersData.id,
+                    },
+                    data: {
+                        isOnline: true,
+                    },
+                });
+                res.status(200).json({ userId: usersData.id });
             }
             else {
-                res.status(200).json({ message: "Nie znaleziono użytkownika." });
+                res.status(200).json({ message: "Niepoprawne dane logowania." });
             }
             return;
         }
         else {
-            const isUserLoggedIn = yield prisma.user.findFirst({
-                where: {
-                    id: user.id,
-                    phoneNumber: Number(user.phoneNumber),
-                    directionalNumber: Number(user.directionalNumber),
-                },
-                select: {
-                    isOnline: true,
-                },
-            });
-            console.log(isUserLoggedIn);
-            if (isUserLoggedIn === null || isUserLoggedIn === void 0 ? void 0 : isUserLoggedIn.isOnline) {
-                return res
-                    .status(200)
-                    .json({ message: "Ten użytkownik jest już zalogowany." });
-            }
             const userData = yield prisma.user.findUnique({
                 where: {
                     id: user.id,
@@ -124,18 +118,29 @@ app.post("/login", (req, res) => __awaiter(void 0, void 0, void 0, function* () 
                 },
             });
             if (userData) {
-                const passwordEqual = react_native_bcrypt_1.default.compareSync(user.password, userData.password);
+                const passwordEqual = user.password === userData.password;
                 if (passwordEqual) {
-                    res.status(200).json({ userId: userData.id });
+                    yield prisma.user.update({
+                        where: {
+                            id: userData.id,
+                        },
+                        data: {
+                            isOnline: true,
+                        },
+                    });
+                    return res.status(200).json({ userId: userData.id });
                 }
                 else {
-                    res.status(200).json({ message: "Niepoprawne dane logowania." });
+                    return res
+                        .status(200)
+                        .json({ message: "Niepoprawne dane logowania." });
                 }
             }
             else {
-                res.status(200).json({ message: "Nie znaleziono użytkownika." });
+                return res
+                    .status(200)
+                    .json({ message: "Nie znaleziono użytkownika." });
             }
-            return;
         }
     }
     catch (error) {
@@ -145,7 +150,24 @@ app.post("/login", (req, res) => __awaiter(void 0, void 0, void 0, function* () 
 }));
 app.post("/send-code", (req, res) => __awaiter(void 0, void 0, void 0, function* () {
     try {
-        const { phoneNumber, directionalNumber } = req.body;
+        const { phoneNumber, directionalNumber, action } = req.body;
+        const checkIfPhoneNumberIsRegistered = yield prisma.user.findFirst({
+            where: {
+                phoneNumber: Number(phoneNumber),
+                directionalNumber: Number(directionalNumber),
+            },
+        });
+        if (checkIfPhoneNumberIsRegistered && action === "register") {
+            return res.status(200).json({
+                message: "Taki numer telefonu jest już zarejestrowany",
+            });
+        }
+        else if (!checkIfPhoneNumberIsRegistered &&
+            action === "forgotPassword") {
+            return res.status(200).json({
+                message: "Taki numer telefonu nie jest zarejestrowany",
+            });
+        }
         const code = Math.floor(Math.random() * (999999 - 100000 + 1)) + 100000;
         const response = yield vonage.sms.send({
             to: `${directionalNumber.trim()}${phoneNumber.trim()}`,
@@ -222,7 +244,7 @@ app.post("/change-user-name", (req, res) => __awaiter(void 0, void 0, void 0, fu
         });
         if (!checkUser)
             res.status(200).json({ message: "Nie znaleziono użytkownika." });
-        const changedUser = prisma.user.update({
+        const changedUser = yield prisma.user.update({
             where: {
                 id: userId,
             },
@@ -240,7 +262,6 @@ app.post("/change-user-name", (req, res) => __awaiter(void 0, void 0, void 0, fu
 app.get("/get-user-name/:userId", (req, res) => __awaiter(void 0, void 0, void 0, function* () {
     try {
         const { userId } = req.params;
-        console.log(userId);
         if (!userId)
             return res.status(200).json({ message: "Brak id użytkownika." });
         const getUserName = yield prisma.user.findUnique({
@@ -263,7 +284,6 @@ app.get("/get-user-name/:userId", (req, res) => __awaiter(void 0, void 0, void 0
 app.get("/logout/:userId", (req, res) => __awaiter(void 0, void 0, void 0, function* () {
     try {
         const { userId } = req.params;
-        console.log(userId);
         if (!userId)
             return res.status(200).json({ message: "Brak id użytkownika." });
         yield prisma.user.update({
@@ -272,6 +292,7 @@ app.get("/logout/:userId", (req, res) => __awaiter(void 0, void 0, void 0, funct
             },
             data: {
                 isOnline: false,
+                isAvailable: false,
             },
         });
         res.status(200).send();
@@ -324,7 +345,7 @@ app.post("/get-user-id", (req, res) => __awaiter(void 0, void 0, void 0, functio
     }
 }));
 app.post("/get-users-to-chat", (req, res) => __awaiter(void 0, void 0, void 0, function* () {
-    var _a, _b, _c;
+    var _a, _b, _c, _d, _e;
     try {
         const { userId, oneChat } = req.body;
         if (!userId) {
@@ -341,10 +362,38 @@ app.post("/get-users-to-chat", (req, res) => __awaiter(void 0, void 0, void 0, f
                     select: {
                         searchRadius: true,
                         numberOfChats: true,
+                        languagePrefference: true,
                     },
                 },
             },
         });
+        const usersToAvoid = [userId];
+        const blockedByUsers = yield prisma.blockedUsers.findMany({
+            where: {
+                blockedUserId: userId,
+            },
+            select: {
+                userId: true,
+            },
+        });
+        const blockedUsers = yield prisma.blockedUsers.findMany({
+            where: {
+                userId,
+            },
+            select: {
+                blockedUserId: true,
+            },
+        });
+        if (blockedByUsers) {
+            for (const blockedByUser of blockedByUsers) {
+                usersToAvoid.push(blockedByUser.userId);
+            }
+        }
+        if (blockedUsers) {
+            for (const blockedUser of blockedUsers) {
+                usersToAvoid.push(blockedUser.blockedUserId);
+            }
+        }
         if (!userLocation)
             throw Error("Błąd pobierania lokalizacji użytkownika.");
         const rangeInDegrees = ((_a = userLocation.settings) === null || _a === void 0 ? void 0 : _a.searchRadius) / 111000;
@@ -360,10 +409,14 @@ app.post("/get-users-to-chat", (req, res) => __awaiter(void 0, void 0, void 0, f
                 },
                 AND: {
                     NOT: {
-                        id: userId,
+                        id: { in: usersToAvoid },
                     },
                     isAvailable: true,
                     isOnline: true,
+                    settings: {
+                        searchRadius: (_b = userLocation.settings) === null || _b === void 0 ? void 0 : _b.searchRadius,
+                        languagePrefference: (_c = userLocation.settings) === null || _c === void 0 ? void 0 : _c.languagePrefference,
+                    },
                 },
             },
             select: {
@@ -384,7 +437,7 @@ app.post("/get-users-to-chat", (req, res) => __awaiter(void 0, void 0, void 0, f
         else {
             let i = 0;
             const usedIndexes = [];
-            if (usersInRange.length <= ((_b = userLocation.settings) === null || _b === void 0 ? void 0 : _b.numberOfChats)) {
+            if (usersInRange.length <= ((_d = userLocation.settings) === null || _d === void 0 ? void 0 : _d.numberOfChats)) {
                 for (const user of usersInRange) {
                     users.push({
                         userId: user.id,
@@ -393,7 +446,7 @@ app.post("/get-users-to-chat", (req, res) => __awaiter(void 0, void 0, void 0, f
                 }
             }
             else {
-                while (i < ((_c = userLocation.settings) === null || _c === void 0 ? void 0 : _c.numberOfChats)) {
+                while (i < ((_e = userLocation.settings) === null || _e === void 0 ? void 0 : _e.numberOfChats)) {
                     const randomIndex = Math.floor(Math.random() * usersInRange.length);
                     if (!usedIndexes.includes(randomIndex)) {
                         users.push({
@@ -434,9 +487,25 @@ app.post("/user-availabilty-status", (req, res) => __awaiter(void 0, void 0, voi
         throw error;
     }
 }));
+app.post("/user-availabilty-status", (req, res) => __awaiter(void 0, void 0, void 0, function* () {
+    try {
+        const { userId, available } = req.body;
+        if (!userId)
+            throw Error("Brak id użytkownika");
+        yield prisma.user.update({
+            where: { id: userId },
+            data: { isAvailable: available },
+        });
+        res.status(200).json();
+    }
+    catch (error) {
+        console.error("Error updating user availablity:", error);
+        throw error;
+    }
+}));
 app.post("/user-settings-save", (req, res) => __awaiter(void 0, void 0, void 0, function* () {
     try {
-        const _d = req.body, { userId } = _d, restData = __rest(_d, ["userId"]);
+        const _f = req.body, { userId } = _f, restData = __rest(_f, ["userId"]);
         if (!userId)
             throw Error("Brak id użytkownika");
         yield prisma.settings.update({
@@ -476,18 +545,152 @@ app.post("/user-settings-fetch", (req, res) => __awaiter(void 0, void 0, void 0,
         throw error;
     }
 }));
-// app.listen(port, () => {
-//   console.log(`[server]: Server is running at http://localhost:${port}`);
-// });
+app.post("/report-user", (req, res) => __awaiter(void 0, void 0, void 0, function* () {
+    try {
+        const { userId, blockUser, reportMessage, reportedUserId } = req.body;
+        if (!userId)
+            throw Error("Brak id użytkownika");
+        if (!reportedUserId)
+            throw Error("Brak id reportowanego użytkownika");
+        const reportResponse = yield prisma.reports.create({
+            data: {
+                reportingUserId: userId,
+                reportedUserId,
+                reportMessage,
+                reportTime: new Date(),
+                resolved: false,
+            },
+        });
+        if (!reportResponse)
+            throw Error("Błąd podczas zgłaszania użytkownika");
+        if (blockUser) {
+            const blockUserResponse = yield prisma.blockedUsers.create({
+                data: {
+                    blockedUserId: reportedUserId,
+                    userId: userId,
+                },
+            });
+            if (!blockUserResponse)
+                throw Error("Błąd bodczas blokowania użytkownika");
+        }
+        res.status(200).json({
+            message: blockUser
+                ? "Pomyślnie zgłoszono użytkownika i zablokowano użytkownika."
+                : "Pomyślnie zgłoszono użytkownika.",
+        });
+    }
+    catch (error) {
+        console.error("Error reporting/blocking user:", error);
+        throw error;
+    }
+}));
+app.post("/fetch-blocked-users", (req, res) => __awaiter(void 0, void 0, void 0, function* () {
+    try {
+        const { userId } = req.body;
+        if (!userId)
+            throw Error("Brak id użytkownika");
+        const blockedUserIds = yield prisma.blockedUsers.findMany({
+            where: {
+                userId,
+            },
+            select: {
+                blockedUserId: true,
+            },
+        });
+        const mappedBlockedUserIds = blockedUserIds.map((blockedUser) => blockedUser.blockedUserId);
+        const blockedUsers = yield prisma.user.findMany({
+            where: {
+                id: {
+                    in: mappedBlockedUserIds,
+                },
+            },
+            select: {
+                id: true,
+                name: true,
+            },
+        });
+        res.status(200).json(blockedUsers !== null && blockedUsers !== void 0 ? blockedUsers : null);
+    }
+    catch (error) {
+        console.error("Error reporting/blocking user:", error);
+        throw error;
+    }
+}));
+app.post("/unblock-user", (req, res) => __awaiter(void 0, void 0, void 0, function* () {
+    try {
+        const { userId, blockedUser } = req.body;
+        if (!userId)
+            throw Error("Brak id użytkownika");
+        const blockedUserRowId = yield prisma.blockedUsers.findFirst({
+            where: {
+                userId,
+                blockedUserId: blockedUser,
+            },
+            select: {
+                id: true,
+            },
+        });
+        yield prisma.blockedUsers.delete({
+            where: {
+                id: blockedUserRowId === null || blockedUserRowId === void 0 ? void 0 : blockedUserRowId.id,
+            },
+        });
+        return res.status(200).send();
+    }
+    catch (error) {
+        console.error("Error unblocking user:", error);
+        throw error;
+    }
+}));
+app.post("/forgot-password", (req, res) => __awaiter(void 0, void 0, void 0, function* () {
+    try {
+        const { userId, directionalNumber, password, phoneNumber } = req.body;
+        if (userId) {
+            yield prisma.user.update({
+                where: {
+                    id: userId,
+                    phoneNumber: Number(phoneNumber),
+                    directionalNumber: Number(directionalNumber),
+                },
+                data: {
+                    password: password,
+                },
+            });
+        }
+        else {
+            const userToUpdate = yield prisma.user.findFirst({
+                where: {
+                    phoneNumber: Number(phoneNumber),
+                    directionalNumber: Number(directionalNumber),
+                },
+            });
+            if (!userToUpdate)
+                throw Error("Nie znaleziono użytkownika.");
+            yield prisma.user.update({
+                where: {
+                    id: userToUpdate.id,
+                },
+                data: {
+                    password: password,
+                },
+            });
+        }
+        res.status(200).send();
+    }
+    catch (error) {
+        console.error("Error unblocking user:", error);
+        throw error;
+    }
+}));
 const userIdToSocketId = {};
-const setUserOnlineState = (userId, state) => __awaiter(void 0, void 0, void 0, function* () {
+const setUserOnlineState = (userId, state, availabilty) => __awaiter(void 0, void 0, void 0, function* () {
     yield prisma.user.update({
         where: {
             id: userId,
         },
         data: {
             isOnline: state,
-            isAvailable: true,
+            isAvailable: availabilty,
         },
     });
 });
@@ -496,23 +699,72 @@ io.on("connection", (socket) => __awaiter(void 0, void 0, void 0, function* () {
     socket.on("mapUserId", (userId) => __awaiter(void 0, void 0, void 0, function* () {
         if (!userIdToSocketId[userId]) {
             console.log(`Mapping user ${userId} to socket ${socket.id}`);
-            yield setUserOnlineState(userId, true);
+            yield setUserOnlineState(userId, true, true);
             userIdToSocketId[userId] = socket.id;
-            console.log("usersMapped", userIdToSocketId);
         }
     }));
-    socket.on("sendInvite", (invitationData) => {
+    socket.on("sendInvite", (invitationData) => __awaiter(void 0, void 0, void 0, function* () {
         const { from, to } = invitationData;
-        io.to(userIdToSocketId[to]).emit("invitationRecieved", from);
-    });
-    socket.on("acceptDenyInvitation", (data) => {
-        const { accepted, to } = data;
+        const userIdToCheck = to;
+        if (!userIdToCheck)
+            return socket.emit("userUnavailable", {
+                message: "Nie znaleziono takiego użytkownika.",
+            });
+        const checkInvitedUser = yield prisma.user.findUnique({
+            where: {
+                id: to,
+            },
+            select: {
+                isAvailable: true,
+                isOnline: true,
+            },
+        });
+        if (!(checkInvitedUser === null || checkInvitedUser === void 0 ? void 0 : checkInvitedUser.isAvailable)) {
+            socket.emit("userUnavailable", {
+                message: "Zaproszony użytkownik jest zajęty.",
+            });
+        }
+        else {
+            yield prisma.user.updateMany({
+                where: {
+                    id: {
+                        in: [to, from],
+                    },
+                },
+                data: {
+                    isAvailable: false,
+                },
+            });
+            io.to(userIdToSocketId[to]).emit("invitationRecieved", from);
+        }
+    }));
+    socket.on("acceptDenyInvitation", (data) => __awaiter(void 0, void 0, void 0, function* () {
+        const { accepted, to, from } = data;
+        if (!accepted) {
+            yield prisma.user.updateMany({
+                where: {
+                    id: {
+                        in: [to, from],
+                    },
+                },
+                data: {
+                    isAvailable: true,
+                },
+            });
+        }
         io.to(userIdToSocketId[to]).emit("inviteDecision", accepted);
-    });
-    socket.on("message", (messageData) => {
+    }));
+    socket.on("message", (messageData) => __awaiter(void 0, void 0, void 0, function* () {
         const { from, to, message } = messageData;
         const senderSocketId = userIdToSocketId[from];
         const recipientSocketId = userIdToSocketId[to];
+        yield prisma.message.create({
+            data: {
+                senderId: from,
+                recipientId: to,
+                content: message,
+            },
+        });
         if (senderSocketId && recipientSocketId) {
             io.to(senderSocketId).emit("messageReceived", {
                 from: from,
@@ -525,9 +777,9 @@ io.on("connection", (socket) => __awaiter(void 0, void 0, void 0, function* () {
                 message: message,
             });
         }
-    });
+    }));
     socket.on("rangeCheck", (rangeCheckData) => __awaiter(void 0, void 0, void 0, function* () {
-        var _e;
+        var _g;
         const { userId, userIdToCheck } = rangeCheckData;
         try {
             const userLocation = yield prisma.user.findUnique({
@@ -546,7 +798,7 @@ io.on("connection", (socket) => __awaiter(void 0, void 0, void 0, function* () {
             });
             if (!userLocation)
                 throw new Error("Error fetching user location.");
-            const rangeInDegrees = ((_e = userLocation.settings) === null || _e === void 0 ? void 0 : _e.searchRadius) / 111000;
+            const rangeInDegrees = ((_g = userLocation.settings) === null || _g === void 0 ? void 0 : _g.searchRadius) / 111000;
             const stillInRange = yield prisma.user.findUnique({
                 where: {
                     id: userIdToCheck,
@@ -567,7 +819,10 @@ io.on("connection", (socket) => __awaiter(void 0, void 0, void 0, function* () {
             io.to(socket.id).emit("error", "An error occurred while checking user range.");
         }
     }));
-    socket.on("disconnectedFromChatByRangeCheck", () => { });
+    socket.on("cancelInvite", (invitedUser) => {
+        const socketOfInvitedUser = userIdToSocketId[invitedUser];
+        socket.to(socketOfInvitedUser).emit("invitationCanceled");
+    });
     socket.on("endChat", (to) => {
         io.to(userIdToSocketId[to]).emit("chatEnded", true);
     });
@@ -576,14 +831,12 @@ io.on("connection", (socket) => __awaiter(void 0, void 0, void 0, function* () {
         const userId = Object.keys(userIdToSocketId).find((key) => userIdToSocketId[key] === socket.id);
         console.log("User disconnected: ", userId);
         if (userId) {
-            yield setUserOnlineState(userId, false);
+            yield setUserOnlineState(userId, false, false);
             console.log(`Deleting mapping for user ${userId}`);
             delete userIdToSocketId[userId];
         }
     }));
 }));
-// io.listen(Number(port));
-// app.listen(port);
 server.listen(port, () => {
     console.log(`[server]: Server is running at http://localhost:${port}`);
 });

@@ -1,19 +1,19 @@
 import AsyncStorage from "@react-native-async-storage/async-storage";
 import { useNavigation } from "@react-navigation/native";
-import { AppHeaderTitle } from "app/components/ui/app-header-title";
-import { IncognitoIcon } from "app/components/ui/incognito-icon";
-import { generateUserName } from "app/utils/generate-user-name";
-import axios from "axios";
+import ConfirmChatDialog from "../../components/dialog-components/confirm-chat-dialog";
+import { AppHeaderTitle } from "../../components/ui/app-header-title";
+import { IncognitoIcon } from "../../components/ui/incognito-icon";
+import { axiosInstance } from "../../utils/axios-instance";
+import { generateUserName } from "../../utils/generate-user-name";
+import { socket } from "../../utils/socket";
+import { useTheme } from "../../utils/theme-provider";
+import { handleUserAvailable } from "../../utils/toggle-user-available";
 import { router } from "expo-router";
 import { useEffect, useState } from "react";
-import { Pressable, View } from "react-native";
+import { AppState, Pressable, View } from "react-native";
 import { ActivityIndicator, Icon, RadioButton, Text } from "react-native-paper";
 import Toast from "react-native-toast-message";
 import UserNameDialog from "./components/user-name-dialog";
-import { socket } from "app/utils/socket";
-import ConfirmChatDialog from "app/components/dialog-components/confirm-chat-dialog";
-import { axiosInstance } from "app/utils/axios-instance";
-import { useTheme } from "app/utils/theme-provider";
 
 const MainView = () => {
   const [numberOfChats, setNumberOfChats] = useState<{
@@ -33,6 +33,21 @@ const MainView = () => {
   );
   const [userName, setUserName] = useState("");
   const theme = useTheme();
+
+  useEffect(() => {
+    const handleAppStateChange = (nextAppState: string) => {
+      if (nextAppState === "active" && userId) {
+        socket.emit("mapUserId", userId);
+      }
+    };
+    const subscription = AppState.addEventListener(
+      "change",
+      handleAppStateChange
+    );
+    return () => {
+      subscription.remove();
+    };
+  }, []);
 
   useEffect(() => {
     const fetchThemeFromDatabase = async () => {
@@ -55,7 +70,10 @@ const MainView = () => {
           });
         }
       } catch (error) {
-        console.error("Błąd pobierania motywu z bazy danych:", error);
+        Toast.show({
+          text1: "Błąd pobierania motywu z bazy danych:",
+          type: "error",
+        });
       }
     };
     fetchThemeFromDatabase();
@@ -73,6 +91,14 @@ const MainView = () => {
   const closeInviteModal = () => {
     setInviteModalOpen(false);
   };
+  useEffect(() => {
+    socket.on("invitationCancelled", () => {
+      closeInviteModal();
+    });
+    return () => {
+      socket.off("invitationCancelled");
+    };
+  }, []);
 
   const getUserId = async () => {
     const userId = await AsyncStorage.getItem("userId");
@@ -86,7 +112,7 @@ const MainView = () => {
   }, [userId]);
 
   const mapUser = async () => {
-    if (!userMapped) {
+    if (!userMapped && userId) {
       socket.emit("mapUserId", userId);
       setUserMapped(true);
     }
@@ -94,24 +120,6 @@ const MainView = () => {
   useEffect(() => {
     mapUser();
   }, [userMapped, userId]);
-
-  const handleUserAvailable = async () => {
-    try {
-      if (userId) {
-        await axiosInstance.post("/user-availabilty-status", {
-          userId: userId,
-          available: true,
-        });
-      }
-      return;
-    } catch (error) {
-      Toast.show({ type: "error", text1: "Błąd zmiany statusu użytkownika" });
-    }
-  };
-
-  useEffect(() => {
-    handleUserAvailable();
-  }, [handleUserAvailable, userId]);
 
   socket.on("invitationRecieved", async (invitationRecieved: string) => {
     try {
@@ -121,7 +129,12 @@ const MainView = () => {
       if (response.data.userName) {
         setnvitationUserName(response.data.userName);
       }
-    } catch (error) {}
+    } catch (error) {
+      Toast.show({
+        type: "error",
+        text1: "Błąd pobierania nazwy zapraszającego.",
+      });
+    }
     setInvitationFromUser(invitationRecieved);
     openInviteModal();
   });
@@ -135,6 +148,7 @@ const MainView = () => {
       });
       closeInviteModal();
       if (accept) {
+        await handleUserAvailable(userId, false);
         router.push({
           pathname: "views/chat-views/chat-view",
           params: { invitedUser: invitationFromUser },
@@ -172,7 +186,7 @@ const MainView = () => {
         Toast.show({ type: "error", text1: userName.data.message });
       }
     };
-    if (!userName) {
+    if (!userName && userId) {
       getUserName();
     }
   }, [userId]);
@@ -185,7 +199,10 @@ const MainView = () => {
       headerTitle: () => <AppHeaderTitle />,
       headerLeft: () => (
         <Pressable
-          onPress={() => router.push("views/settings-view")}
+          onPress={async () => {
+            if (userId) await handleUserAvailable(userId, false);
+            router.push("views/settings-view");
+          }}
           disabled={profileModalOpen}
         >
           <Icon color="white" source="cog" size={25} />
@@ -217,6 +234,7 @@ const MainView = () => {
               from: userId,
               to: response.data[0].userId,
             });
+            await handleUserAvailable(userId, false);
             router.push({
               pathname: "views/chat-views/awaiting-chat-view",
               params: { invitedUser: response.data[0].userId },
@@ -227,7 +245,10 @@ const MainView = () => {
               text1: "Brak dostępnych użytkowników w okolicy.",
             });
           }
-        } else {
+        }
+      } else {
+        if (userId) {
+          await handleUserAvailable(userId, false);
           router.push("views/chat-views/chat-list-view");
         }
       }
@@ -242,6 +263,7 @@ const MainView = () => {
   if (!userId)
     return (
       <View
+        testID="testoweid"
         style={{
           display: "flex",
           width: "100%",

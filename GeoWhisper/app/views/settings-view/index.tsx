@@ -3,7 +3,9 @@ import ConfirmExitSettingsDialog from "app/components/dialog-components/confirm-
 import { AppHeaderTitle } from "app/components/ui/app-header-title";
 import { areObjectsEqual } from "app/utils/are-objects-equal";
 import { axiosInstance } from "app/utils/axios-instance";
+import { KeepLoggedIn } from "app/utils/keep-logged-in-enum";
 import { useTheme } from "app/utils/theme-provider";
+import { handleUserAvailable } from "app/utils/toggle-user-available";
 import { router, useNavigation } from "expo-router";
 import { useEffect, useState } from "react";
 import { Pressable, ScrollView, View } from "react-native";
@@ -11,7 +13,6 @@ import { Button, Divider, Icon, Switch, Text } from "react-native-paper";
 import Toast from "react-native-toast-message";
 import { TextSliderValue } from "./components/text-slider-value";
 import { TwoRadioOptions } from "./components/two-radio-buttons";
-import { KeepLoggedIn } from "app/utils/keep-logged-in-enum";
 
 interface SettingsObjectsType {
   usersInUsersList: number;
@@ -181,21 +182,38 @@ const SettingsView = () => {
           <Icon color="white" source="arrow-left" size={25} />
         </Pressable>
       ),
+      headerRight: () => (
+        <Pressable
+          onPress={() => router.push("views/settings-view/blocked-users")}
+        >
+          <Icon color="white" source="account-cancel" size={25} />
+        </Pressable>
+      ),
       headerTitleAlign: "center",
       headerBackVisible: false,
     });
   }, [navigation, appMainColor, confirmationModal]);
 
-  const handleBack = () => {
-    const settingsChanged = areObjectsEqual<SettingsObjectsType>(
+  const handleBack = async () => {
+    const settingsDidntChange = areObjectsEqual<SettingsObjectsType>(
       preSaveSettings,
       currentSettings
     );
-    if (settingsChanged) {
+    if (settingsDidntChange) {
+      const userId = await AsyncStorage.getItem("userId");
+      if (userId) await handleUserAvailable(userId, true);
       router.back();
     } else {
       openConfirmationModal();
     }
+  };
+  const handleConfirmExitSettings = () => {
+    updateTheme({
+      appMainColor: `rgb(${preSaveSettings.red}, ${preSaveSettings.green}, ${preSaveSettings.blue})`,
+      appTheme: preSaveSettings.theme.light ? "light" : "dark",
+    });
+    closeConfirmationModal();
+    router.back();
   };
   const handleSave = async () => {
     try {
@@ -220,6 +238,11 @@ const SettingsView = () => {
           type: "success",
           text1: "Pomyślnie zapisano ustawienia.",
         });
+      } else {
+        Toast.show({
+          type: "error",
+          text1: "Coś poszło nie tak nie zapisano ustawień.",
+        });
       }
     } catch (error) {
       Toast.show({
@@ -231,10 +254,10 @@ const SettingsView = () => {
   const handleLogOut = async () => {
     try {
       const userId = await AsyncStorage.getItem("userId");
+      await AsyncStorage.setItem("keepLoggedIn", KeepLoggedIn.False);
       await axiosInstance.get(`/logout/${userId}`);
       router.replace("views/login-register-view/login-view");
     } catch (error) {
-      console.log(error);
       Toast.show({
         type: "error",
         text1: "Błąd podczas wylogowywania.",
@@ -457,10 +480,7 @@ const SettingsView = () => {
       </ScrollView>
       {confirmationModal && (
         <ConfirmExitSettingsDialog
-          handleConfirm={() => {
-            router.back();
-            closeConfirmationModal();
-          }}
+          handleConfirm={handleConfirmExitSettings}
           message="Ustawienia nie zostały zapisane. Czy na pewno chcesz opuścić widok?"
           onClose={closeConfirmationModal}
           open={confirmationModal}

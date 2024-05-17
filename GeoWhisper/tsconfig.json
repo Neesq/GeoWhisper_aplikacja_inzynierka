@@ -17,5 +17,12 @@
       "*": ["node_modules/*"],
       "app/*": ["./app/*"]
     }
-  }
+  },
+  "include": [
+    "**/*.ts",
+    "**/*.tsx",
+    ".expo/types/**/*.ts",
+    "expo-env.d.ts",
+    "expect-matchers.d.ts"
+  ]
 }

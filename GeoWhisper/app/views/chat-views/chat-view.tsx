@@ -1,8 +1,10 @@
 import AsyncStorage from "@react-native-async-storage/async-storage";
 import ConfirmDialog from "app/components/dialog-components/confirm-dialog";
 import { AppHeaderTitle } from "app/components/ui/app-header-title";
+import { axiosInstance } from "app/utils/axios-instance";
 import { socket } from "app/utils/socket";
-import axios from "axios";
+import { useTheme } from "app/utils/theme-provider";
+import { handleUserAvailable } from "app/utils/toggle-user-available";
 import { router, useLocalSearchParams, useNavigation } from "expo-router";
 import React, { useEffect, useRef, useState } from "react";
 import {
@@ -19,9 +21,8 @@ import {
 import { ActivityIndicator, Icon, IconButton } from "react-native-paper";
 import Toast from "react-native-toast-message";
 import { ChatBaloon } from "./components/chat-baloon";
-import { axiosInstance } from "app/utils/axios-instance";
-import { useTheme } from "app/utils/theme-provider";
 import { CheckIfInRange } from "./components/check-if-in-range";
+import ReportModal from "./components/report-user-modal";
 
 let disconnectTimerId: NodeJS.Timeout | null = null;
 let rangeCheckIntervalId: NodeJS.Timeout | null = null;
@@ -30,7 +31,9 @@ let toasterShowed = false;
 const ChatView: React.FC = () => {
   const [inputText, setInputText] = useState("");
   const [confirmDialog, setConfirmDialog] = useState(false);
-
+  const [reportModalOpen, setReportModalOpen] = useState(false);
+  const [blockUser, setBlockUser] = useState(false);
+  const [reportMessage, setReportMessage] = useState("");
   const params = useLocalSearchParams();
   const { invitedUser } = params;
 
@@ -52,6 +55,13 @@ const ChatView: React.FC = () => {
   const closeConfirmDialog = () => {
     setConfirmDialog(false);
   };
+  const openReportModal = () => {
+    Keyboard.dismiss();
+    setReportModalOpen(true);
+  };
+  const closeReportModal = () => {
+    setReportModalOpen(false);
+  };
 
   useEffect(() => {
     navigation.setOptions({
@@ -62,6 +72,11 @@ const ChatView: React.FC = () => {
       headerLeft: () => (
         <Pressable onPress={openConfirmDialog}>
           <Icon color="white" source="arrow-left" size={25} />
+        </Pressable>
+      ),
+      headerRight: () => (
+        <Pressable onPress={openReportModal}>
+          <Icon color="white" source="alert" size={25} />
         </Pressable>
       ),
       headerTitleAlign: "center",
@@ -109,7 +124,7 @@ const ChatView: React.FC = () => {
   }, []);
 
   useEffect(() => {
-    socket.on("chatEnded", async (chatEnded: boolean) => {
+    socket.on("chatEnded", async () => {
       if (rangeCheckIntervalId) {
         clearInterval(rangeCheckIntervalId);
       }
@@ -121,7 +136,8 @@ const ChatView: React.FC = () => {
         text1: "Chat zakończył się zaraz zostaniesz przeniesiony.",
         visibilityTime: 2000,
       });
-      setTimeout(() => {
+      setTimeout(async () => {
+        await handleUserAvailable(userIds.from, true);
         router.replace("views/main-view");
       }, 2000);
     });
@@ -129,7 +145,7 @@ const ChatView: React.FC = () => {
       socket.off("chatEnded");
     };
   }, []);
-  const handleEndChat = () => {
+  const handleEndChat = async () => {
     if (rangeCheckIntervalId) {
       clearInterval(rangeCheckIntervalId);
     }
@@ -138,7 +154,31 @@ const ChatView: React.FC = () => {
     }
     socket.emit("endChat", userIds.to);
     closeConfirmDialog();
+    await handleUserAvailable(userIds.from, true);
     router.replace("views/main-view");
+  };
+
+  const handleReportUser = async (
+    userReporting: string,
+    userReported: string
+  ) => {
+    try {
+      const response = await axiosInstance.post("/report-user", {
+        userId: userReporting,
+        reportedUserId: userReported,
+        reportMessage,
+        blockUser,
+      });
+      if (response.data.message) {
+        Toast.show({ type: "success", text1: response.data.message });
+        await handleEndChat();
+      }
+    } catch (error) {
+      Toast.show({
+        type: "error",
+        text1: "Błąd podczas zgłaszania użytkownika.",
+      });
+    }
   };
 
   if (!userIds.to || !userIds.from) return <ActivityIndicator />;
@@ -248,6 +288,17 @@ const ChatView: React.FC = () => {
           onClose={closeConfirmDialog}
           message="Czy na pewno chcesz zakończyć rozmowę? Nie będzie można do niej wrócić."
           open={confirmDialog}
+        />
+      )}
+      {reportModalOpen && (
+        <ReportModal
+          blockUser={blockUser}
+          handleConfirm={() => handleReportUser(userIds.from, userIds.to)}
+          onClose={closeReportModal}
+          open={reportModalOpen}
+          reportMessage={reportMessage}
+          setBlockUser={setBlockUser}
+          setReportMessage={setReportMessage}
         />
       )}
     </>

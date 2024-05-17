@@ -10,8 +10,8 @@ generator client {
 
 datasource db {
   provider = "postgresql"
-  // url      = env("DATABASE_URL")
-  url      = env("DATABASE_URL_PROD")
+  url      = env("DATABASE_URL")
+  // url      = env("DATABASE_URL_PROD")
 }
 
 model User {
@@ -27,6 +27,7 @@ model User {
   latitude Float?
   sentMessages      Message[] @relation("SentMessages")
   receivedMessages  Message[] @relation("ReceivedMessages")
+  blockedUsers BlockedUsers[]
 }
 
 model Settings {
@@ -48,4 +49,20 @@ model Message {
   createdAt   DateTime @default(now())
   sender      User     @relation("SentMessages", fields: [senderId], references: [id])
   recipient   User     @relation("ReceivedMessages", fields: [recipientId], references: [id])
+}
+
+model Reports{
+  id Int @id @default(autoincrement())
+  reportingUserId String
+  reportedUserId String
+  reportMessage String
+  reportTime DateTime @default(now())
+  resolved Boolean @default(false)
+}
+
+model BlockedUsers{
+  id Int @id @default(autoincrement())
+  userId String
+  blockedUserId String
+  user User @relation(fields: [userId], references: [id])
 }

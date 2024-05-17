@@ -1,14 +1,12 @@
 import { useTheme } from "app/utils/theme-provider";
-import { Field, Formik } from "formik";
 import { FC, useState } from "react";
-import { View, Text } from "react-native";
+import { Text, View } from "react-native";
 import { Button, Card, Modal, TextInput } from "react-native-paper";
-import * as yup from "yup";
 
 interface OtpVerificationDialogDialogProps {
   open: boolean;
   onClose: () => void;
-  handleConfirm: (code: string) => void;
+  handleConfirm: (code: string, setOtpCode: (code: string) => void) => void;
 }
 const OtpVerificationDialogDialog: FC<OtpVerificationDialogDialogProps> = ({
   open,
@@ -76,7 +74,7 @@ const OtpVerificationDialogDialog: FC<OtpVerificationDialogDialogProps> = ({
             mode="contained"
             buttonColor={theme.appMainColor}
             style={{ borderRadius: 5 }}
-            onPress={() => handleConfirm(otpCode)}
+            onPress={() => handleConfirm(otpCode, setOtpCode)}
           >
             <Text>Potwierdź</Text>
           </Button>

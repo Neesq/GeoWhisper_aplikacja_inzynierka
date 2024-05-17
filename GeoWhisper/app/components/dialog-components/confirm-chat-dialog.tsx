@@ -1,9 +1,7 @@
-import { useTheme } from "app/utils/theme-provider";
-import { Field, Formik } from "formik";
+import { useTheme } from "../../utils/theme-provider";
 import { FC } from "react";
-import { View, Text } from "react-native";
-import { Button, Card, Chip, Modal, TextInput } from "react-native-paper";
-import * as yup from "yup";
+import { Text, View } from "react-native";
+import { Button, Card, Chip, Modal } from "react-native-paper";
 
 interface ConfirmChatDialogProps {
   open: boolean;

@@ -3,18 +3,9 @@ import * as Location from "expo-location";
 import { Stack } from "expo-router";
 import { useEffect, useState } from "react";
 import Toast from "react-native-toast-message";
-import { ThemeProvider } from "./utils/theme-provider";
-import axios from "axios";
-import { socket } from "./utils/socket";
 import { axiosInstance } from "./utils/axios-instance";
-import bcrypt from "bcryptjs";
-import isaac from "isaac";
-
-bcrypt.setRandomFallback((len: number) => {
-  const buf = new Uint8Array(len);
-  isaac.rand();
-  return Array.from(buf);
-});
+import { socket } from "./utils/socket";
+import { ThemeProvider } from "./utils/theme-provider";
 
 socket.on("disconnect", (reason) => {
   if (reason === "io server disconnect") {
@@ -26,12 +17,6 @@ const AppLayout = () => {
   const [userId, setUserId] = useState("");
   const [currentLocation, setCurrentLocation] =
     useState<Location.LocationObject | null>(null);
-
-  useEffect(() => {
-    return () => {
-      console.log("app closed");
-    };
-  }, []);
 
   useEffect(() => {
     socket.connect();
@@ -50,10 +35,6 @@ const AppLayout = () => {
   }, [userId]);
   useEffect(() => {
     (async () => {
-      let { status } = await Location.requestForegroundPermissionsAsync();
-      if (status !== "granted") {
-        return;
-      }
       if (userId) {
         getLocation();
       }
@@ -110,6 +91,7 @@ const AppLayout = () => {
           <Stack.Screen name="views/chat-views/chat-view" />
           <Stack.Screen name="views/chat-views/chat-list-view" />
           <Stack.Screen name="views/chat-views/awaiting-chat-view" />
+          <Stack.Screen name="views/settings-view/blocked-users" />
         </Stack>
         <Toast />
       </ThemeProvider>

@@ -16,7 +16,6 @@
     "@react-navigation/native": "^6.1.9",
     "@react-navigation/native-stack": "^6.9.17",
     "@types/crypto-js": "^4.2.2",
-    "@types/socket.io-client": "^3.0.0",
     "axios": "^1.6.8",
     "babel-preset-expo": "~11.0.0",
     "expo": "^51.0.8",
@@ -52,6 +51,7 @@
     "@types/lodash": "^4.17.0",
     "@types/react": "~18.2.45",
     "@types/react-native-get-random-values": "^1.8.2",
+    "@types/socket.io-client": "^3.0.0",
     "@types/uuid": "^9.0.8",
     "npm-force-resolutions": "^0.0.10",
     "typescript": "~5.3.3"

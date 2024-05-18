@@ -380,6 +380,7 @@ app.post(
     try {
       const { latitude, longitude, userId } = req.body;
       if (!userId) return res.status(200).send();
+      console.log(`Udating location for ${userId}`);
       await prisma.user.update({
         where: { id: userId },
         data: {

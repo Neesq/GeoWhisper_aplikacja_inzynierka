@@ -4,7 +4,6 @@
       "android": {
         "buildType": "apk",
         "image": "latest",
-        "developmentClient": true,
         "distribution": "internal"
       }
     },

@@ -8,7 +8,9 @@
       }
     },
     "production": {
-      "image": "latest"
+      "android": {
+        "image": "latest"
+      }
     },
     "development": {}
   }

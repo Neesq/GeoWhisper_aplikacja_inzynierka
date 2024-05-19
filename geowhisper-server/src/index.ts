@@ -92,7 +92,7 @@ app.post(
       }
 
       if (!user.id) {
-        const usersData = await prisma.user.findFirstOrThrow({
+        const usersData = await prisma.user.findFirst({
           where: {
             directionalNumber: Number(user.directionalNumber),
             phoneNumber: Number(user.phoneNumber),
@@ -102,6 +102,11 @@ app.post(
             password: true,
           },
         });
+        if (!usersData) {
+          return res
+            .status(200)
+            .json({ message: "Nie znaleziono użytkownika." });
+        }
 
         const passwordEqual = user.password === usersData.password;
         if (passwordEqual) {

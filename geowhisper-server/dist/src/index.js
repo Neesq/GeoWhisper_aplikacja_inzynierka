@@ -83,7 +83,7 @@ exports.app.post("/login", (req, res) => __awaiter(void 0, void 0, void 0, funct
                 .json({ message: "Ten użytkownik jest już zalogowany." });
         }
         if (!user.id) {
-            const usersData = yield prisma.user.findFirstOrThrow({
+            const usersData = yield prisma.user.findFirst({
                 where: {
                     directionalNumber: Number(user.directionalNumber),
                     phoneNumber: Number(user.phoneNumber),
@@ -93,6 +93,11 @@ exports.app.post("/login", (req, res) => __awaiter(void 0, void 0, void 0, funct
                     password: true,
                 },
             });
+            if (!usersData) {
+                return res
+                    .status(200)
+                    .json({ message: "Nie znaleziono użytkownika." });
+            }
             const passwordEqual = user.password === usersData.password;
             if (passwordEqual) {
                 yield prisma.user.update({
@@ -308,6 +313,7 @@ exports.app.post("/update-location", (req, res) => __awaiter(void 0, void 0, voi
         const { latitude, longitude, userId } = req.body;
         if (!userId)
             return res.status(200).send();
+        console.log(`Udating location for ${userId}`);
         yield prisma.user.update({
             where: { id: userId },
             data: {
@@ -629,37 +635,44 @@ exports.app.post("/unblock-user", (req, res) => __awaiter(void 0, void 0, void 0
 }));
 exports.app.post("/forgot-password", (req, res) => __awaiter(void 0, void 0, void 0, function* () {
     try {
-        const { userId, directionalNumber, password, phoneNumber } = req.body;
-        if (userId) {
-            yield prisma.user.update({
-                where: {
-                    id: userId,
-                    phoneNumber: Number(phoneNumber),
-                    directionalNumber: Number(directionalNumber),
-                },
-                data: {
-                    password: password,
-                },
-            });
-        }
-        else {
-            const userToUpdate = yield prisma.user.findFirst({
-                where: {
-                    phoneNumber: Number(phoneNumber),
-                    directionalNumber: Number(directionalNumber),
-                },
-            });
-            if (!userToUpdate)
-                throw Error("Nie znaleziono użytkownika.");
-            yield prisma.user.update({
-                where: {
-                    id: userToUpdate.id,
-                },
-                data: {
-                    password: password,
-                },
-            });
-        }
+        const { directionalNumber, password, phoneNumber } = req.body;
+        const userToUpdate = yield prisma.user.findFirst({
+            where: {
+                phoneNumber: Number(phoneNumber),
+                directionalNumber: Number(directionalNumber),
+            },
+        });
+        if (!userToUpdate)
+            throw Error("Nie znaleziono użytkownika.");
+        yield prisma.user.update({
+            where: {
+                id: userToUpdate.id,
+            },
+            data: {
+                password: password,
+            },
+        });
+        res.status(200).send();
+    }
+    catch (error) {
+        console.error("Error unblocking user:", error);
+        throw error;
+    }
+}));
+exports.app.post("/set-logged-in-when-keep-logged-in", (req, res) => __awaiter(void 0, void 0, void 0, function* () {
+    try {
+        const { userId } = req.body;
+        if (!userId)
+            throw new Error("nie znaleziono użytkownika");
+        yield prisma.user.update({
+            where: {
+                id: userId,
+            },
+            data: {
+                isAvailable: true,
+                isOnline: true,
+            },
+        });
         res.status(200).send();
     }
     catch (error) {

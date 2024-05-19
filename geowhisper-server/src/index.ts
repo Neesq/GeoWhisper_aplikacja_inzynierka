@@ -796,7 +796,6 @@ app.post(
   async (
     req: CustomRequest<
       {
-        userId: string;
         directionalNumber: number;
         phoneNumber: number;
         password: string;
@@ -806,35 +805,54 @@ app.post(
     res: Response
   ) => {
     try {
-      const { userId, directionalNumber, password, phoneNumber } = req.body;
-      if (userId) {
-        await prisma.user.update({
-          where: {
-            id: userId,
-            phoneNumber: Number(phoneNumber),
-            directionalNumber: Number(directionalNumber),
-          },
-          data: {
-            password: password,
-          },
-        });
-      } else {
-        const userToUpdate = await prisma.user.findFirst({
-          where: {
-            phoneNumber: Number(phoneNumber),
-            directionalNumber: Number(directionalNumber),
-          },
-        });
-        if (!userToUpdate) throw Error("Nie znaleziono użytkownika.");
-        await prisma.user.update({
-          where: {
-            id: userToUpdate.id,
-          },
-          data: {
-            password: password,
-          },
-        });
-      }
+      const { directionalNumber, password, phoneNumber } = req.body;
+
+      const userToUpdate = await prisma.user.findFirst({
+        where: {
+          phoneNumber: Number(phoneNumber),
+          directionalNumber: Number(directionalNumber),
+        },
+      });
+      if (!userToUpdate) throw Error("Nie znaleziono użytkownika.");
+      await prisma.user.update({
+        where: {
+          id: userToUpdate.id,
+        },
+        data: {
+          password: password,
+        },
+      });
+      res.status(200).send();
+    } catch (error) {
+      console.error("Error unblocking user:", error);
+      throw error;
+    }
+  }
+);
+
+app.post(
+  "/set-logged-in-when-keep-logged-in",
+  async (
+    req: CustomRequest<
+      {
+        userId: string;
+      },
+      any
+    >,
+    res: Response
+  ) => {
+    try {
+      const { userId } = req.body;
+      if (!userId) throw new Error("nie znaleziono użytkownika");
+      await prisma.user.update({
+        where: {
+          id: userId,
+        },
+        data: {
+          isAvailable: true,
+          isOnline: true,
+        },
+      });
       res.status(200).send();
     } catch (error) {
       console.error("Error unblocking user:", error);

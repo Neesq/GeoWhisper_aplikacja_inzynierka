@@ -29,16 +29,11 @@ const dotenv_1 = __importDefault(require("dotenv"));
 const client_1 = require("@prisma/client");
 const body_parser_1 = __importDefault(require("body-parser"));
 const uuid_1 = require("uuid");
-const { Vonage } = require("@vonage/server-sdk");
 const socket_io_1 = require("socket.io");
 const cors_1 = __importDefault(require("cors"));
 const http_1 = require("http");
 const js_base64_1 = require("js-base64");
-const vonage = new Vonage({
-    apiKey: process.env.VONAGE_API_KEY,
-    apiSecret: process.env.VONAGE_API_SECRET,
-});
-// Initialize Twilio client
+const twilio_1 = require("twilio");
 dotenv_1.default.config();
 exports.app = (0, express_1.default)();
 exports.app.use(body_parser_1.default.json());
@@ -46,12 +41,20 @@ exports.app.use(body_parser_1.default.urlencoded({ extended: true }));
 exports.app.use((0, cors_1.default)());
 const port = process.env.PORT || 3000;
 const prisma = new client_1.PrismaClient();
+const accountSid = process.env.ACCOUNT_SID || "";
+const authToken = process.env.AUTH_TOKEN || "";
 const server = (0, http_1.createServer)(exports.app);
 const io = new socket_io_1.Server(server, {
     cors: {
         origin: "*",
     },
 });
+// io.listen(3001, {
+//   cors: {
+//     origin: "*",
+//   },
+// });
+const client = new twilio_1.Twilio(accountSid, authToken);
 exports.app.get("/", (req, res) => {
     res.send("Express + TypeScript Server");
 });
@@ -175,12 +178,20 @@ exports.app.post("/send-code", (req, res) => __awaiter(void 0, void 0, void 0, f
             });
         }
         const code = Math.floor(Math.random() * (999999 - 100000 + 1)) + 100000;
-        const response = yield vonage.sms.send({
-            to: `${directionalNumber.trim()}${phoneNumber.trim()}`,
-            from: "GeoWhisper",
-            text: `Kod weryfikacyjny GeoWhisper: ${code}`,
+        client.messages
+            .create({
+            body: `Kod weryfikacyjny GeoWhisper: ${code}`,
+            from: "+13344714097",
+            to: `+${String(directionalNumber).trim()}${String(phoneNumber).trim()}`,
+        })
+            .then((message) => {
+            res.status(200).json({ code });
+        })
+            .catch((error) => {
+            return res
+                .status(200)
+                .json({ message: "Błąd podczas wysyłania wiadomości SMS." });
         });
-        res.status(200).json({ code });
     }
     catch (error) {
         console.error("Error verifying code:", error);

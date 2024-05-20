@@ -4,16 +4,11 @@ import { PrismaClient } from "@prisma/client";
 import { Query } from "express-serve-static-core";
 import bodyParser from "body-parser";
 import { v4 as uuidv4 } from "uuid";
-const { Vonage } = require("@vonage/server-sdk");
 import { Server, Socket } from "socket.io";
 import cors from "cors";
 import { createServer } from "http";
 import { Base64 } from "js-base64";
-const vonage = new Vonage({
-  apiKey: process.env.VONAGE_API_KEY,
-  apiSecret: process.env.VONAGE_API_SECRET,
-});
-// Initialize Twilio client
+import { Twilio } from "twilio";
 
 dotenv.config();
 
@@ -23,7 +18,8 @@ app.use(bodyParser.urlencoded({ extended: true }));
 app.use(cors());
 const port = process.env.PORT || 3000;
 const prisma = new PrismaClient();
-
+const accountSid: string = process.env.ACCOUNT_SID || "";
+const authToken: string = process.env.AUTH_TOKEN || "";
 const server = createServer(app);
 const io = new Server(server, {
   cors: {
@@ -35,7 +31,7 @@ const io = new Server(server, {
 //     origin: "*",
 //   },
 // });
-
+const client = new Twilio(accountSid, authToken);
 interface CustomRequest<T, U extends Query> extends Request {
   body: T;
   query: U;
@@ -206,13 +202,22 @@ app.post(
         });
       }
       const code = Math.floor(Math.random() * (999999 - 100000 + 1)) + 100000;
-      const response = await vonage.sms.send({
-        to: `${directionalNumber.trim()}${phoneNumber.trim()}`,
-        from: "GeoWhisper",
-        text: `Kod weryfikacyjny GeoWhisper: ${code}`,
-      });
-
-      res.status(200).json({ code });
+      client.messages
+        .create({
+          body: `Kod weryfikacyjny GeoWhisper: ${code}`,
+          from: "+13344714097",
+          to: `+${String(directionalNumber).trim()}${String(
+            phoneNumber
+          ).trim()}`,
+        })
+        .then((message) => {
+          res.status(200).json({ code });
+        })
+        .catch((error) => {
+          return res
+            .status(200)
+            .json({ message: "Błąd podczas wysyłania wiadomości SMS." });
+        });
     } catch (error) {
       console.error("Error verifying code:", error);
       throw error;

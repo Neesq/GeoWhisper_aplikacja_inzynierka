@@ -849,11 +849,27 @@ app.post(
       },
       any
     >,
-    res: Response
+    res: Response<{ message: string } | null>
   ) => {
     try {
       const { userId } = req.body;
       if (!userId) throw new Error("nie znaleziono użytkownika");
+
+      const checkIfUserLoggedIn = await prisma.user.findUnique({
+        where: {
+          id: userId,
+        },
+        select: {
+          isOnline: true,
+        },
+      });
+
+      if (checkIfUserLoggedIn?.isOnline) {
+        return res
+          .status(200)
+          .json({ message: "Ten użytkownik jest już zalogowany." });
+      }
+
       await prisma.user.update({
         where: {
           id: userId,
